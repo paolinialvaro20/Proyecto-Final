@@ -1,0 +1,1 @@
+INSERT INTO `observacion` (`id`, `detalle`, ...) VALUES (NULL, '...');
