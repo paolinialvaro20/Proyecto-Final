@@ -1,126 +1,267 @@
 <?php
+session_start();
+
 require_once "conexion.php";
+
+// Verificar que haya un usuario logueado
+if (!isset($_SESSION["id_usuario"])) {
+    header("Location: login.php");
+    exit;
+}
+
+require_once "menu.php";
 
 $mensaje = "";
 
+// Usuario que inició sesión
+$id_usuario_registro = $_SESSION["id_usuario"];
+
+// Obtener los datos del usuario que inició sesión
+$sqlUsuario = "SELECT usuario
+               FROM usuario
+               WHERE id = ?";
+
+$stmtUsuario = $conexion->prepare($sqlUsuario);
+$stmtUsuario->execute([$id_usuario_registro]);
+
+$usuarioRegistro = $stmtUsuario->fetch(PDO::FETCH_ASSOC);
+
+// Fecha y hora actual para mostrar en pantalla
+$fechaRegistro = date("Y-m-d H:i:s");
+
+
+// Obtener usuarios activos para el desplegable
+$sqlUsuarios = "SELECT id, usuario
+                FROM usuario
+                WHERE activo = 1
+                ORDER BY usuario";
+
+$stmtUsuarios = $conexion->prepare($sqlUsuarios);
+$stmtUsuarios->execute();
+
+$usuarios = $stmtUsuarios->fetchAll(PDO::FETCH_ASSOC);
+
+
+// Procesar formulario
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $numero_serie = trim($_POST["numero_serie"]);
     $monto = $_POST["monto"];
+    $id_usuario_asignado = $_POST["id_usuario_asignado"];
+
+    // Determinar estado y fecha de cobro
+    if (isset($_POST["cobrado"])) {
+
+        $estado = "Cobrado";
+        $fecha_cobro = date("Y-m-d H:i:s");
+
+    } else {
+
+        $estado = "Pendiente";
+        $fecha_cobro = null;
+    }
+
 
     $sql = "INSERT INTO factura
-            (numero_serie, monto, fecha_registro, estado, id_USUARIO)
-            VALUES (?, ?, NOW(), 'Pendiente', ?)";
+            (
+                numero_serie,
+                monto,
+                fecha_registro,
+                fecha_cobro,
+                estado,
+                id_usuario_registro,
+                id_usuario_asignado
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )";
 
     $stmt = $conexion->prepare($sql);
 
-    // Usuario fijo para las pruebas
-    $idUsuario = 1;
+    if ($stmt->execute([
+        $numero_serie,
+        $monto,
+        $fechaRegistro,
+        $fecha_cobro,
+        $estado,
+        $id_usuario_registro,
+        $id_usuario_asignado
+    ])) {
 
-    if ($stmt->execute([$numero_serie, $monto, $idUsuario])) {
-        $mensaje = "<div class='alert alert-success'>Felicidades. Factura agregada correctamente.</div>";
+        $mensaje = "Factura agregada correctamente.";
+
     } else {
-        $mensaje = "<div class='alert alert-danger'>Error al guardar la factura.</div>";
+
+        $mensaje = "Error al guardar la factura.";
     }
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
 
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<title>Nueva factura</title>
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Nueva factura</title>
 
 </head>
 
-<body class="bg-light">
+<body>
+     <link rel="stylesheet" href="estilo.css">
 
-<div class="container mt-5">
+    <h1>Nueva factura</h1>
 
-<div class="row justify-content-center">
+    <?php if ($mensaje != ""): ?>
 
-<div class="col-md-6">
+        <p>
+            <?= htmlspecialchars($mensaje) ?>
+        </p>
 
-<div class="card shadow">
+    <?php endif; ?>
 
-<div class="card-header bg-primary text-white">
 
-<h4>Nueva factura</h4>
+    <form method="post">
 
-</div>
 
-<div class="card-body">
+        <p>
 
-<?= $mensaje ?>
+            <label for="usuario_registro">
+                Usuario que registra:
+            </label>
 
-<form method="post">
+            <input
+                type="text"
+                id="usuario_registro"
+                value="<?= htmlspecialchars($usuarioRegistro["usuario"]) ?>"
+                readonly
+            >
 
-<div class="mb-3">
+        </p>
 
-<label class="form-label">
 
-Número de serie
+        <p>
 
-</label>
+            <label for="fecha_registro">
+                Fecha y hora de registro:
+            </label>
 
-<input
-type="text"
-name="numero_serie"
-class="form-control"
-maxlength="20"
-required>
+            <input
+                type="text"
+                id="fecha_registro"
+                value="<?= htmlspecialchars($fechaRegistro) ?>"
+                readonly
+            >
 
-</div>
+        </p>
 
-<div class="mb-3">
 
-<label class="form-label">
+        <p>
 
-Monto
+            <label for="numero_serie">
+                Número de serie:
+            </label>
 
-</label>
+            <input
+                type="text"
+                id="numero_serie"
+                name="numero_serie"
+                maxlength="20"
+                required
+            >
 
-<input
-type="number"
-name="monto"
-step="0.01"
-min="0"
-class="form-control"
-required>
+        </p>
 
-</div>
 
-<button
-type="submit"
-class="btn btn-success">
+        <p>
 
-Guardar factura
+            <label for="monto">
+                Monto:
+            </label>
 
-</button>
+            <input
+                type="number"
+                id="monto"
+                name="monto"
+                step="0.01"
+                min="0"
+                required
+            >
 
-<a
-href="index.php"
-class="btn btn-secondary">
+        </p>
 
-Cancelar
 
-</a>
+        <p>
 
-</form>
+            <label for="id_usuario_asignado">
+                Usuario asignado:
+            </label>
 
-</div>
+            <select
+                id="id_usuario_asignado"
+                name="id_usuario_asignado"
+                required
+            >
 
-</div>
+                <option value="">
+                    -- Seleccione un usuario --
+                </option>
 
-</div>
+                <?php foreach ($usuarios as $usuario): ?>
 
-</div>
+                    <option value="<?= $usuario["id"] ?>">
 
-</div>
+                        <?= htmlspecialchars($usuario["usuario"]) ?>
+
+                    </option>
+
+                <?php endforeach; ?>
+
+            </select>
+
+        </p>
+
+
+        <p>
+
+            <label>
+
+                <input
+                    type="checkbox"
+                    name="cobrado"
+                    value="1"
+                >
+
+                Cobrado
+
+            </label>
+
+        </p>
+
+
+        <p>
+
+            <button type="submit">
+                Guardar factura
+            </button>
+
+            <a href="index.php">
+                Cancelar
+            </a>
+
+        </p>
+
+
+    </form>
 
 </body>
+
 </html>

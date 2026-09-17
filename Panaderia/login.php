@@ -68,6 +68,7 @@ $error = $_GET["error"] ?? "";
 </head>
 
 <body>
+    <link rel="stylesheet" href="estilo.css">
 
 <div class="login">
 

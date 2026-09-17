@@ -1,14 +1,22 @@
-```php
 <?php
+
+session_start();
 
 require_once "conexion.php";
 
+if (!isset($_SESSION["id_usuario"])) {
+    header("Location: login.php");
+    exit;
+}
+
 // Obtener los roles disponibles
 $sqlRoles = "SELECT id, nombre FROM rol ORDER BY nombre";
+
 $stmtRoles = $conexion->prepare($sqlRoles);
 $stmtRoles->execute();
 
 $roles = $stmtRoles->fetchAll();
+
 
 // Procesar el formulario
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
@@ -16,6 +24,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $usuario = trim($_POST["usuario"]);
     $contrasenia = $_POST["contrasenia"];
     $id_rol = $_POST["id_rol"];
+
 
     // Validaciones básicas
     if ($usuario === "" || $contrasenia === "" || $id_rol === "") {
@@ -25,9 +34,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } else {
 
         // Comprobar si el usuario ya existe
-        $sqlExiste = "SELECT id FROM usuario WHERE usuario = ?";
+        $sqlExiste = "SELECT id
+                      FROM usuario
+                      WHERE usuario = ?";
+
         $stmtExiste = $conexion->prepare($sqlExiste);
         $stmtExiste->execute([$usuario]);
+
 
         if ($stmtExiste->fetch()) {
 
@@ -36,12 +49,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         } else {
 
             // Encriptar contraseña
-            $contraseniaHash = password_hash($contrasenia, PASSWORD_DEFAULT);
+            $contraseniaHash = password_hash(
+                $contrasenia,
+                PASSWORD_DEFAULT
+            );
+
 
             // Crear usuario
-            $sql = "INSERT INTO usuario 
+            $sql = "INSERT INTO usuario
                         (usuario, contrasenia, activo, id_ROL)
-                    VALUES 
+                    VALUES
                         (?, ?, 1, ?)";
 
             $stmt = $conexion->prepare($sql);
@@ -51,6 +68,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $contraseniaHash,
                 $id_rol
             ]);
+
 
             $mensaje = "Usuario creado correctamente.";
 
@@ -66,17 +84,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <html lang="es">
 
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>Crear usuario</title>
+
+    <link rel="stylesheet" href="estilo.css">
+
 </head>
 
 <body>
 
 <?php require_once "menu.php"; ?>
 
+
 <h1>Crear usuario</h1>
+
 
 <?php if (isset($mensaje)): ?>
 
@@ -86,9 +114,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <?php endif; ?>
 
+
 <form method="POST">
 
     <p>
+
         <label for="usuario">
             Usuario:
         </label>
@@ -102,9 +132,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             value="<?= htmlspecialchars($usuario ?? '') ?>"
             required
         >
+
     </p>
 
+
     <p>
+
         <label for="contrasenia">
             Contraseña:
         </label>
@@ -117,9 +150,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             name="contrasenia"
             required
         >
+
     </p>
 
+
     <p>
+
         <label for="id_rol">
             Rol:
         </label>
@@ -136,19 +172,31 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 Seleccione un rol
             </option>
 
+
             <?php foreach ($roles as $rol): ?>
 
                 <option
                     value="<?= htmlspecialchars($rol["id"]) ?>"
-                    <?= (isset($_POST["id_rol"]) && $_POST["id_rol"] == $rol["id"]) ? "selected" : "" ?>
+                    <?= (
+                        isset($_POST["id_rol"])
+                        &&
+                        $_POST["id_rol"] == $rol["id"]
+                    )
+                        ? "selected"
+                        : ""
+                    ?>
                 >
+
                     <?= htmlspecialchars($rol["nombre"]) ?>
+
                 </option>
 
             <?php endforeach; ?>
 
         </select>
+
     </p>
+
 
     <button type="submit">
         Crear usuario
@@ -156,7 +204,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 </form>
 
+
 </body>
 
 </html>
-```
