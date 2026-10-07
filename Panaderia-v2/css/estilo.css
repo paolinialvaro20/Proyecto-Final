@@ -1,0 +1,74 @@
+body {
+    font-family: Arial, sans-serif;
+    background: #f5f5f5;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+h1 {
+    margin-bottom: 20px;
+}
+
+
+
+/*--------------- ESTILOS DEL MENU ------------------*/
+
+/* Letras blancas de la barra de navegación */
+.navbar .nav-link,
+.navbar .navbar-brand {
+    color: white !important;
+}
+
+/* Color al pasar el mouse por las opciones */
+.navbar .nav-link:hover {
+    color: #cccccc !important;
+}
+
+/* Fondo oscuro de los menús desplegables */
+.navbar .dropdown-menu {
+    background-color: rgb(61, 64, 66);
+}
+
+/* Letras blancas de las opciones desplegables */
+.navbar .dropdown-item {
+    color: white;
+}
+
+/* Efecto al pasar el mouse por las opciones */
+.navbar .dropdown-item:hover {
+    background-color: #53585e;
+    color: white;
+}
+
+.navbar .usuario-menu {
+    color: #0dcaf0 !important;
+}
+
+/* Color al pasar el mouse */
+.navbar .usuario-menu:hover {
+    color: #8eeaff !important;
+}
+
+/* Color cuando se hace click y el menú queda abierto */
+.navbar .usuario-menu.show {
+    color: #8eeaff !important;
+}
+
+.navbar {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.navbar .container-fluid {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding-left: 12px;
+    padding-right: 12px;
+}
