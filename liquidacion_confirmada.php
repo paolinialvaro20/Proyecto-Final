@@ -4,60 +4,96 @@ session_start();
 
 require_once "conexion.php";
 
-// Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
     header("Location: login.php");
     exit;
 }
-
-require_once "menu.php";
-
-
-// =====================================================
-// RECIBIR DATOS DE LA LIQUIDACIÓN
-// =====================================================
 
 $id_repartidor = $_GET["id_repartidor"] ?? "";
 $fecha = $_GET["fecha"] ?? "";
 $total = $_GET["total"] ?? "0";
 
 
-// =====================================================
-// VALIDAR REPARTIDOR
-// =====================================================
+// ==========================================
+// BUSCAR REPARTIDOR
+// ==========================================
 
-$repartidor = null;
+$sql = "
+    SELECT usuario
+    FROM usuario
+    WHERE id = :id
+";
 
-if ($id_repartidor !== "" && is_numeric($id_repartidor)) {
+$stmt = $conexion->prepare($sql);
 
-    try {
+$stmt->execute([
+    ":id" => $id_repartidor
+]);
 
-        $sql = "SELECT id, usuario
-                FROM usuario
-                WHERE id = :id";
+$repartidor = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $stmt = $conexion->prepare($sql);
 
-        $stmt->execute([
-            ":id" => $id_repartidor
-        ]);
+// ==========================================
+// BUSCAR PAGOS LIQUIDADOS
+// ==========================================
 
-        $repartidor = $stmt->fetch(PDO::FETCH_ASSOC);
+$sqlPagos = "
+    SELECT
+        p.id,
+        p.monto,
+        p.forma_pago,
+        p.fecha_hora,
+        f.numero_serie
+    FROM pago p
+    INNER JOIN factura f
+        ON p.id_factura = f.id
+    WHERE p.id_repartidor = :id_repartidor
+    AND DATE(p.fecha_hora) = :fecha
+    AND p.liquidado = 1
+    ORDER BY p.fecha_hora ASC
+";
 
-    } catch (PDOException $e) {
+$stmtPagos = $conexion->prepare($sqlPagos);
 
-        $repartidor = null;
+$stmtPagos->execute([
+    ":id_repartidor" => $id_repartidor,
+    ":fecha" => $fecha
+]);
+
+$pagos = $stmtPagos->fetchAll(PDO::FETCH_ASSOC);
+
+
+// ==========================================
+// CALCULAR TOTALES
+// ==========================================
+
+$totalGeneral = 0;
+$totalEfectivo = 0;
+$totalTransferencia = 0;
+$totalDebito = 0;
+$totalOtro = 0;
+
+foreach ($pagos as $pago) {
+
+    $monto = (float)$pago["monto"];
+
+    $totalGeneral += $monto;
+
+    if ($pago["forma_pago"] === "Efectivo") {
+        $totalEfectivo += $monto;
     }
-}
 
+    if ($pago["forma_pago"] === "Transferencia") {
+        $totalTransferencia += $monto;
+    }
 
-// =====================================================
-// SI NO EXISTE EL REPARTIDOR
-// =====================================================
+    if ($pago["forma_pago"] === "Debito") {
+        $totalDebito += $monto;
+    }
 
-if (!$repartidor) {
-
-    die("No se pudo obtener la información del repartidor.");
+    if ($pago["forma_pago"] === "Otro") {
+        $totalOtro += $monto;
+    }
 }
 
 ?>
@@ -68,19 +104,140 @@ if (!$repartidor) {
 
 <head>
 
-    <meta charset="UTF-8">
+<meta charset="UTF-8">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
 
-    <title>Liquidación confirmada</title>
+<title>Liquidación confirmada</title>
 
-    <link
-        rel="stylesheet"
-        href="estilo.css"
-    >
+<style>
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f4f4;
+    margin: 0;
+    padding: 30px;
+}
+
+.comprobante {
+    max-width: 850px;
+    margin: auto;
+    background: white;
+    padding: 35px;
+    border: 1px solid #ccc;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+h2 {
+    text-align: center;
+    font-size: 18px;
+    margin-top: 0;
+}
+
+.datos {
+    margin-top: 30px;
+    margin-bottom: 25px;
+}
+
+.datos p {
+    margin: 8px 0;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th,
+td {
+    border: 1px solid #999;
+    padding: 10px;
+    text-align: left;
+}
+
+th {
+    background: #eeeeee;
+}
+
+.monto {
+    text-align: right;
+}
+
+.totales {
+    margin-top: 30px;
+}
+
+.total-general {
+    font-size: 22px;
+    font-weight: bold;
+    margin-top: 15px;
+    border-top: 2px solid black;
+    padding-top: 12px;
+}
+
+.firmas {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 80px;
+}
+
+.firma {
+    width: 40%;
+    text-align: center;
+    border-top: 1px solid black;
+    padding-top: 8px;
+}
+
+.botones {
+    text-align: center;
+    margin-top: 35px;
+}
+
+button {
+    padding: 12px 25px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.volver {
+    display: block;
+    text-align: center;
+    margin-top: 20px;
+}
+
+
+/* ==========================================
+   AL GUARDAR COMO PDF
+   ========================================== */
+
+@media print {
+
+    body {
+        background: white;
+        padding: 0;
+    }
+
+    .comprobante {
+        border: none;
+        max-width: 100%;
+        padding: 10px;
+    }
+
+    .botones,
+    .volver {
+        display: none;
+    }
+}
+
+</style>
 
 </head>
 
@@ -88,104 +245,218 @@ if (!$repartidor) {
 <body>
 
 
-<h1>
-    Liquidación confirmada
-</h1>
+<div class="comprobante">
+
+    <h1>
+        RES
+    </h1>
+
+    <h2>
+        Sistema de Gestión de Pagos
+    </h2>
+
+    <hr>
+
+    <h1>
+        LIQUIDACIÓN DIARIA
+    </h1>
 
 
-<hr>
+    <div class="datos">
+
+        <p>
+            <strong>Repartidor:</strong>
+
+            <?= htmlspecialchars(
+                $repartidor["usuario"] ?? ""
+            ) ?>
+        </p>
+
+        <p>
+            <strong>Fecha:</strong>
+
+            <?= htmlspecialchars($fecha) ?>
+        </p>
+
+    </div>
 
 
-<h2>
-    La liquidación fue realizada correctamente.
-</h2>
+    <table>
+
+        <thead>
+
+            <tr>
+
+                <th>
+                    Pago
+                </th>
+
+                <th>
+                    Factura
+                </th>
+
+                <th>
+                    Hora
+                </th>
+
+                <th>
+                    Forma de pago
+                </th>
+
+                <th>
+                    Monto
+                </th>
+
+            </tr>
+
+        </thead>
 
 
-<p>
+        <tbody>
 
-    <strong>
-        Repartidor:
-    </strong>
+        <?php foreach ($pagos as $pago): ?>
 
-    <?= htmlspecialchars($repartidor["usuario"]) ?>
+            <tr>
 
-</p>
+                <td>
+                    <?= htmlspecialchars($pago["id"]) ?>
+                </td>
 
+                <td>
+                    <?= htmlspecialchars(
+                        $pago["numero_serie"]
+                    ) ?>
+                </td>
 
-<p>
+                <td>
+                    <?= htmlspecialchars(
+                        date(
+                            "H:i",
+                            strtotime($pago["fecha_hora"])
+                        )
+                    ) ?>
+                </td>
 
-    <strong>
-        Fecha:
-    </strong>
+                <td>
+                    <?= htmlspecialchars(
+                        $pago["forma_pago"]
+                    ) ?>
+                </td>
 
-    <?= htmlspecialchars($fecha) ?>
+                <td class="monto">
 
-</p>
+                    $<?= number_format(
+                        (float)$pago["monto"],
+                        2,
+                        ",",
+                        "."
+                    ) ?>
 
+                </td>
 
-<p>
+            </tr>
 
-    <strong>
-        Total liquidado:
-    </strong>
+        <?php endforeach; ?>
 
-    $<?= number_format(
-        (float)$total,
-        2,
-        ",",
-        "."
-    ) ?>
+        </tbody>
 
-</p>
-
-
-<hr>
-
-
-<p>
-
-    Los pagos correspondientes a esta liquidación
-    fueron marcados como
-
-    <strong>
-        LIQUIDADOS.
-    </strong>
-
-</p>
+    </table>
 
 
-<p>
+    <div class="totales">
 
-    Estos pagos ya no aparecerán nuevamente
-    entre los pagos pendientes de liquidación.
+        <p>
+            <strong>Efectivo:</strong>
 
-</p>
+            $<?= number_format(
+                $totalEfectivo,
+                2,
+                ",",
+                "."
+            ) ?>
+        </p>
+
+        <p>
+            <strong>Transferencia:</strong>
+
+            $<?= number_format(
+                $totalTransferencia,
+                2,
+                ",",
+                "."
+            ) ?>
+        </p>
+
+        <p>
+            <strong>Débito:</strong>
+
+            $<?= number_format(
+                $totalDebito,
+                2,
+                ",",
+                "."
+            ) ?>
+        </p>
+
+        <p>
+            <strong>Otro:</strong>
+
+            $<?= number_format(
+                $totalOtro,
+                2,
+                ",",
+                "."
+            ) ?>
+        </p>
 
 
-<br>
+        <div class="total-general">
+
+            TOTAL LIQUIDADO:
+
+            $<?= number_format(
+                $totalGeneral,
+                2,
+                ",",
+                "."
+            ) ?>
+
+        </div>
+
+    </div>
 
 
-<a
-    href="liquidacion_diaria.php?id_repartidor=<?= urlencode($id_repartidor) ?>&fecha=<?= urlencode($fecha) ?>"
->
-    Volver a liquidación diaria
-</a>
+    <div class="firmas">
+
+        <div class="firma">
+            Firma del repartidor
+        </div>
+
+        <div class="firma">
+            Firma del responsable
+        </div>
+
+    </div>
 
 
-&nbsp; | &nbsp;
+    <div class="botones">
+
+        <button onclick="window.print()">
+            Guardar como PDF
+        </button>
+
+    </div>
 
 
-<a href="auditoria.php">
-    Ver auditoría
-</a>
+    <a
+        class="volver"
+        href="liquidacion_diaria.php"
+    >
+        Volver a Liquidación diaria
+    </a>
 
 
-&nbsp; | &nbsp;
-
-
-<a href="index.php">
-    Volver al inicio
-</a>
+</div>
 
 
 </body>
