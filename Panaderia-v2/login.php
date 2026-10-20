@@ -12,15 +12,15 @@ $error = $_GET["error"] ?? "";
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
+   <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panadería - Iniciar sesión</title>
-    <!-- Bootstrap 5.3.8 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Login</title>
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="css/bootstrap-5.3.8/css/bootstrap.min.css">
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-    <!-- CSS propio -->
-    <link rel="stylesheet" href="estilo.css">
+    <link rel="stylesheet" href="imagenes/bootstrap-icons-1.13.1/bootstrap-icons.min.css">
+    <!-- Estilos propios -->
+    <link rel="stylesheet" href="css/estilo.css">
 </head>
 <body class="bg-light">
     <div class="container d-flex justify-content-center align-items-center min-vh-100">
@@ -86,9 +86,8 @@ $error = $_GET["error"] ?? "";
         </div>
     </div>
 
-    
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+
+    <?php include "pie_pagina.php"; ?>
 </body>
 </html>
 

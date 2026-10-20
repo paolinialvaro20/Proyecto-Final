@@ -1,16 +1,15 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 - Nos quedamos sin pan</title>
-    <!-- Bootstrap 5.3.8 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Error 404</title>
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="css/bootstrap-5.3.8/css/bootstrap.min.css">
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-    <!-- CSS propio -->
-    <link rel="stylesheet" href="estilo.css">
+    <link rel="stylesheet" href="imagenes/bootstrap-icons-1.13.1/bootstrap-icons.min.css">
+    <!-- Estilos propios -->
+    <link rel="stylesheet" href="css/estilo.css">
 </head>
 <body class="bg-light">
     <div class="container d-flex justify-content-center align-items-center min-vh-100">
@@ -41,8 +40,13 @@
 
             <!-- Botón volver -->
             <div class="mt-4">
-                <a href="index.php" class="btn login-btn px-4 py-2 fw-bold">
-                    <i class="bi bi-house-door"></i> 
+                <a href="index.php" class="btn btn-volver-inicio px-4 py-2 fw-bold">
+                    <i class="bi bi-house-door me-2"></i>
                     Volver al inicio
                 </a>
+            </div>
 
+        </div>
+    </div>
+</body>
+</html>

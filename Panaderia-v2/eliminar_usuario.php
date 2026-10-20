@@ -136,7 +136,7 @@ $usuarios = $stmtUsuarios->fetchAll(PDO::FETCH_ASSOC);
         </div>
     </div>
     
-
+    
     <!-- JavaScript de confirmacion -->
     <script src="js/eliminar_usuario.js"></script>
     <!-- JavaScript de Bootstrap 5.3.8 -->

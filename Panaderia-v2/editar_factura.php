@@ -376,7 +376,7 @@ if ($id_factura_editar != "") {
         </div>
     </div>
      
-
+    
     <!-- JavaScript  para fecha de cobro -->
     <script src="js/editar_factura.js"></script>
     <!-- JavaScript de Bootstrap 5.3.8 -->
