@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 14-10-2026 a las 00:50:45
+-- Tiempo de generación: 21-10-2026 a las 01:32:16
 -- Versión del servidor: 10.4.32-MariaDB
--- Versión de PHP: 8.2.12
+-- Versión de PHP: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -148,7 +148,7 @@ CREATE TABLE `factura` (
   `fecha_cobro` datetime DEFAULT NULL,
   `estado` enum('Cobrado','Pendiente','Anulada') NOT NULL DEFAULT 'Pendiente',
   `id_usuario_registro` smallint(5) UNSIGNED NOT NULL,
-  `id_usuario_asignado` smallint(5) DEFAULT NULL
+  `id_usuario_asignado` smallint(5) UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -157,20 +157,20 @@ CREATE TABLE `factura` (
 
 INSERT INTO `factura` (`id`, `numero_serie`, `monto`, `fecha_registro`, `fecha_cobro`, `estado`, `id_usuario_registro`, `id_usuario_asignado`) VALUES
 (1, 'A2563', 1599.00, '2026-06-24 01:59:48', '2026-10-04 23:11:40', 'Cobrado', 1, 23),
-(2, 'R4I5U5', 1200.00, '2026-08-04 22:07:39', NULL, 'Pendiente', 1, 0),
-(3, '809765', 1342.00, '2026-08-04 22:08:12', NULL, 'Pendiente', 1, 0),
+(2, 'R4I5U5', 1200.00, '2026-08-04 22:07:39', NULL, 'Pendiente', 1, NULL),
+(3, '809765', 1342.00, '2026-08-04 22:08:12', NULL, 'Pendiente', 1, NULL),
 (4, 'T75659', 89765.00, '2026-08-04 22:08:38', '2026-10-04 16:39:04', 'Cobrado', 1, 22),
 (5, 'Z6575', 890.00, '2026-08-04 22:09:18', NULL, 'Pendiente', 1, 14),
-(6, '44324', 500000.00, '2026-08-04 22:10:34', '2026-10-04 15:55:08', 'Cobrado', 1, 0),
-(7, 'a287340', 977.00, '2026-08-04 22:16:22', NULL, 'Pendiente', 1, 0),
-(8, 'A2998', 1239.77, '2026-08-04 22:19:51', NULL, 'Pendiente', 1, 0),
-(11, 'A344', 345.00, '2026-08-04 22:24:02', NULL, 'Pendiente', 1, 0),
-(13, 'W74567', 7351.00, '2026-08-04 22:25:10', NULL, 'Pendiente', 1, 0),
+(6, '44324', 500000.00, '2026-08-04 22:10:34', '2026-10-04 15:55:08', 'Cobrado', 1, NULL),
+(7, 'a287340', 977.00, '2026-08-04 22:16:22', NULL, 'Pendiente', 1, NULL),
+(8, 'A2998', 1239.77, '2026-08-04 22:19:51', NULL, 'Pendiente', 1, NULL),
+(11, 'A344', 345.00, '2026-08-04 22:24:02', NULL, 'Pendiente', 1, NULL),
+(13, 'W74567', 7351.00, '2026-08-04 22:25:10', NULL, 'Pendiente', 1, NULL),
 (14, 'S575757', 25000.00, '2026-08-12 20:45:59', '2026-10-03 02:09:42', 'Cobrado', 1, 1),
-(15, 'F58', 500.00, '2026-08-12 20:46:47', NULL, 'Pendiente', 1, 0),
-(16, 'A5678', 87656.00, '2026-08-12 21:06:38', NULL, 'Pendiente', 1, 0),
-(18, 'hg6545', 45678.00, '2026-08-18 20:03:06', '2026-10-04 15:54:55', 'Cobrado', 1, 0),
-(19, 'Z0987', 1234.00, '2026-08-28 21:38:34', '2026-09-08 21:06:44', 'Cobrado', 1, 0),
+(15, 'F58', 500.00, '2026-08-12 20:46:47', NULL, 'Pendiente', 1, NULL),
+(16, 'A5678', 87656.00, '2026-08-12 21:06:38', NULL, 'Pendiente', 1, NULL),
+(18, 'hg6545', 45678.00, '2026-08-18 20:03:06', '2026-10-04 15:54:55', 'Cobrado', 1, NULL),
+(19, 'Z0987', 1234.00, '2026-08-28 21:38:34', '2026-09-08 21:06:44', 'Cobrado', 1, NULL),
 (20, 'dfbd', 1234.00, '2026-09-11 01:05:35', NULL, 'Pendiente', 11, 19),
 (21, 'hjhduwe', 123456.00, '2026-09-17 00:00:54', '2026-09-16 19:01:37', 'Cobrado', 11, 4),
 (22, 'sss', 100000.00, '2026-10-02 01:22:11', '2026-10-01 21:42:43', 'Cobrado', 11, 21),
@@ -189,6 +189,30 @@ INSERT INTO `factura` (`id`, `numero_serie`, `monto`, `fecha_registro`, `fecha_c
 (35, 'gfg', 4567.00, '2026-10-08 01:21:49', '2026-10-07 20:24:32', 'Cobrado', 11, 1),
 (36, 'ghfjhhk', 67789.00, '2026-10-08 01:22:03', '2026-10-07 20:24:12', 'Cobrado', 11, 1),
 (37, 'dfsdfg', 4567.00, '2026-10-08 02:07:55', '2026-10-07 21:08:09', 'Cobrado', 11, 22);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `historial_factura`
+--
+
+CREATE TABLE `historial_factura` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `id_factura` int(10) UNSIGNED NOT NULL,
+  `id_usuario` smallint(5) UNSIGNED DEFAULT NULL,
+  `fecha_hora` datetime NOT NULL DEFAULT current_timestamp(),
+  `tipo_modificacion` varchar(50) NOT NULL,
+  `numero_serie_anterior` varchar(20) DEFAULT NULL,
+  `numero_serie_nuevo` varchar(20) DEFAULT NULL,
+  `monto_anterior` decimal(8,2) DEFAULT NULL,
+  `monto_nuevo` decimal(8,2) DEFAULT NULL,
+  `fecha_cobro_anterior` datetime DEFAULT NULL,
+  `fecha_cobro_nueva` datetime DEFAULT NULL,
+  `estado_anterior` enum('Cobrado','Pendiente','Anulada') DEFAULT NULL,
+  `estado_nuevo` enum('Cobrado','Pendiente','Anulada') DEFAULT NULL,
+  `id_usuario_asignado_anterior` smallint(5) UNSIGNED DEFAULT NULL,
+  `id_usuario_asignado_nuevo` smallint(5) UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -331,7 +355,6 @@ INSERT INTO `usuario` (`id`, `usuario`, `contrasenia`, `activo`, `id_ROL`) VALUE
 (24, 'Flor', '$2y$10$chcFugc8H2dFecQV0Mlt1u14eA6ip.57xVPVjuT/IIrlC7vgIVV0C', 1, 2),
 (25, 'Dana', '$2y$10$LRkt0U7pYQoWx6IkIclMX.QNiOEYr5jnMppXNBJC1WlcV049H15Mi', 1, 1),
 (26, 'Patricia P', '$2y$10$Fa7b8D3tPIgX4AbQ51CP8uwtziBXu7u44.aVuVKQMa5fBX5UTGhW2', 1, 1),
-(27, 'Hector O', '$2y$10$naUS79uB973T5fblCcNuwuwTV/sIkgXpoiAVjKb1L9edMvz.k/tWy', 1, 1),
 (28, 'Gabriel', '$2y$10$7JO6hDvk3ahAjUSvc.suTOGBxfkkPyjmNyK17nYJ6Ji4TElGqkRgO', 1, 2),
 (29, 'Yeilan', '$2y$10$LRk8DDlmTpY/G9a.I2/pjuzfWblfMX63dJbNf478JkioZT6uMDoia', 1, 2),
 (30, 'Juan O', '$2y$10$clgtKv.V7F/6TZpHmP6w9uwImHIhy0.4c0AcyzH0C93SISp0Pkj9.', 1, 3);
@@ -353,7 +376,16 @@ ALTER TABLE `auditoria`
 ALTER TABLE `factura`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `numero_serie` (`numero_serie`),
-  ADD KEY `fk_factura_usuario` (`id_usuario_registro`);
+  ADD KEY `fk_factura_usuario` (`id_usuario_registro`),
+  ADD KEY `fk_factura_usuario_asignado` (`id_usuario_asignado`);
+
+--
+-- Indices de la tabla `historial_factura`
+--
+ALTER TABLE `historial_factura`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_historial_factura` (`id_factura`),
+  ADD KEY `fk_historial_usuario` (`id_usuario`);
 
 --
 -- Indices de la tabla `liquidacion`
@@ -410,6 +442,12 @@ ALTER TABLE `factura`
   MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
 
 --
+-- AUTO_INCREMENT de la tabla `historial_factura`
+--
+ALTER TABLE `historial_factura`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `liquidacion`
 --
 ALTER TABLE `liquidacion`
@@ -453,7 +491,15 @@ ALTER TABLE `auditoria`
 -- Filtros para la tabla `factura`
 --
 ALTER TABLE `factura`
-  ADD CONSTRAINT `fk_factura_usuario` FOREIGN KEY (`id_usuario_registro`) REFERENCES `usuario` (`id`) ON UPDATE CASCADE;
+  ADD CONSTRAINT `fk_factura_usuario` FOREIGN KEY (`id_usuario_registro`) REFERENCES `usuario` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_factura_usuario_asignado` FOREIGN KEY (`id_usuario_asignado`) REFERENCES `usuario` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Filtros para la tabla `historial_factura`
+--
+ALTER TABLE `historial_factura`
+  ADD CONSTRAINT `fk_historial_factura` FOREIGN KEY (`id_factura`) REFERENCES `factura` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_historial_usuario` FOREIGN KEY (`id_usuario`) REFERENCES `usuario` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Filtros para la tabla `liquidacion`
