@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 // Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
@@ -11,38 +12,66 @@ if (!isset($_SESSION["id_usuario"])) {
 $mensaje = "";
 $error = "";
 
-// Procesar eliminación
+
+ // Procesar eliminación
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $id = $_POST["id"] ?? "";
-    if ($id === "" || !is_numeric($id)) {
-        $error = "Rol no válido.";
 
+    if ($id === "" || !ctype_digit((string)$id) || (int)$id <= 0) {
+        $error = "Rol no válido.";
     } else {
         try {
-
             // Verificar que el rol exista
             $sql = "SELECT id, nombre FROM rol WHERE id = :id";
             $stmt = $conexion->prepare($sql);
             $stmt->execute([":id" => $id]);
             $rol = $stmt->fetch(PDO::FETCH_ASSOC);
+
             if (!$rol) {
                 $error = "El rol seleccionado no existe.";
-
             } else {
-                // Eliminar el rol
-                $sql = "DELETE FROM rol WHERE id = :id";
-                $stmt = $conexion->prepare($sql);
-                $stmt->execute([":id" => $id]);
-                $mensaje = "Rol eliminado correctamente.";
-            }
+                try {
+                    // Eliminar el rol y registrar la auditoría
+                    $conexion->beginTransaction();
 
+                    $sql = "DELETE FROM rol WHERE id = :id";
+                    $stmt = $conexion->prepare($sql);
+                    $stmt->execute([":id" => $id]);
+
+                    registrarAuditoria(
+                        $conexion,
+                        $_SESSION["id_usuario"],
+                        "ELIMINAR",
+                        "Rol",
+                        $rol["id"],
+                        "Se eliminó el rol " . $rol["nombre"],
+                        "Nombre: " . $rol["nombre"],
+                        null
+                    );
+
+                    $conexion->commit();
+
+                    $mensaje = "Rol eliminado correctamente.";
+                } catch (PDOException $e) {
+                    if ($conexion->inTransaction()) {
+                        $conexion->rollBack();
+                    }
+
+                    if ($e->getCode() === "23000") {
+                        $error = "No se puede eliminar este rol porque está siendo utilizado por un usuario.";
+                    } else {
+                        $error = "Error al eliminar el rol.";
+                    }
+                } catch (Exception $e) {
+                    if ($conexion->inTransaction()) {
+                        $conexion->rollBack();
+                    }
+
+                    $error = "Error al eliminar el rol.";
+                }
+            }
         } catch (PDOException $e) {
-            // Error por clave foránea
-            if ($e->getCode() === "23000") {
-                $error = "No se puede eliminar este rol porque está siendo utilizado por un usuario.";
-            } else {
-                $error = "Error al eliminar el rol.";
-            }
+            $error = "Error al consultar el rol.";
         }
     }
 }

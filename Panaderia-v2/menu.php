@@ -129,15 +129,10 @@ if (isset($_SESSION["id_usuario"])) {
                             </li>
                         </ul>
                     </li> 
-                                        
+                                                         
                     <!-- Menú Auditoría -->
-                    <li class="nav-item dropdown nav-underline">
-                        <a class="nav-link dropdown-toggle fw-bold" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-shield-check"></i> Auditoría</a>
-                        <ul class="dropdown-menu">
-                            <li>
-                                <a class="dropdown-item" href="listar_auditoria.php"><i class="bi bi-journal-text"></i> Listar auditoría</a>
-                            </li>
-                        </ul>
+                    <li class="nav-item nav-underline">
+                        <a class="nav-link fw-bold d-inline-flex text-nowrap" href="auditoria.php"><i class="bi bi-journal-text me-2"></i> Auditoría</a>
                     </li>
 
                     <!-- Usuario logueado -->

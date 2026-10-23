@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 if (!isset($_SESSION["id_usuario"])) {
     header("Location: login.php");
@@ -35,19 +36,71 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $mensaje = "El nombre de usuario ya existe.";
 
         } else {
+            
             // Encriptar contraseña
             $contraseniaHash = password_hash($contrasenia, PASSWORD_DEFAULT);
 
-            // Crear usuario
-            $sql = "INSERT INTO usuario (usuario, contrasenia, activo, id_ROL) 
-                    VALUES(?, ?, 1, ?)";
+            try {
+                // Iniciar transacción
+                $conexion->beginTransaction();
 
-            $stmt = $conexion->prepare($sql);
-            $stmt->execute([$usuario, $contraseniaHash, $id_rol]);
-            $mensaje = "Usuario creado correctamente.";
+                // Crear usuario
+                $sql = "INSERT INTO usuario
+                        (usuario, contrasenia, activo, id_ROL)
+                        VALUES (?, ?, 1, ?)";
 
-            // Vaciar valores del formulario
-            $usuario = "";
+                $stmt = $conexion->prepare($sql);
+                $stmt->execute([
+                    $usuario,
+                    $contraseniaHash,
+                    $id_rol
+                ]);
+
+                // Obtener el ID del usuario recién creado
+                $idUsuarioNuevo = $conexion->lastInsertId();
+
+                // Obtener el nombre del rol seleccionado
+                $nombreRol = "Sin especificar";
+
+                foreach ($roles as $rol) {
+                    if ((string)$rol["id"] === (string)$id_rol) {
+                        $nombreRol = $rol["nombre"];
+                        break;
+                    }
+                }
+
+                // Registrar el movimiento en la auditoría
+                registrarAuditoria(
+                    $conexion,
+                    $_SESSION["id_usuario"],
+                    "CREAR",
+                    "Usuario",
+                    $idUsuarioNuevo,
+                    "Se creó el usuario " . $usuario,
+                    null,
+                    "Usuario: " . $usuario .
+                    " | Rol: " . $nombreRol .
+                    " | Estado: Activo"
+                );
+
+                // Confirmar la creación y la auditoría
+                $conexion->commit();
+
+                $mensaje = "Usuario creado correctamente.";
+
+                // Vaciar el campo usuario
+                $usuario = "";
+
+            } catch (Exception $e) {
+
+                // Revertir los cambios si ocurre un error
+                if ($conexion->inTransaction()) {
+                    $conexion->rollBack();
+                }
+
+                $mensaje = "No se pudo crear el usuario. Verifique los datos e intente nuevamente.";
+            }
+
         }
     }
 }

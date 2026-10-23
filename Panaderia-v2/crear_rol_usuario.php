@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 // Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
@@ -11,29 +12,70 @@ if (!isset($_SESSION["id_usuario"])) {
 $mensaje = "";
 $error = "";
 
-// Procesar el formulario
+
+ // Procesar el formulario
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $nombre = trim($_POST["nombre"] ?? "");
+
     if ($nombre === "") {
         $error = "Debés ingresar el nombre del rol.";
-    } else {
 
+    } else {
         try {
+            // Iniciar transacción
+            $conexion->beginTransaction();
+
+            // Crear el rol
             $sql = "INSERT INTO rol (nombre) VALUES (:nombre)";
             $stmt = $conexion->prepare($sql);
             $stmt->execute([":nombre" => $nombre]);
+
+            // Obtener el ID del rol recién creado
+            $idRolNuevo = $conexion->lastInsertId();
+
+            // Registrar el movimiento en auditoría
+            registrarAuditoria(
+                $conexion,
+                $_SESSION["id_usuario"],
+                "CREAR",
+                "Rol",
+                $idRolNuevo,
+                "Se creó el rol " . $nombre,
+                null,
+                "Nombre: " . $nombre
+            );
+
+            // Confirmar la creación y la auditoría
+            $conexion->commit();
+
             $mensaje = "Rol agregado correctamente.";
 
         } catch (PDOException $e) {
-            // Error de clave duplicada
-            if ($e->errorInfo[0] === "23000") {
-                $error = "Rol ya existente en la base de datos, verifique";
+            // Revertir si ocurrió un error
+            if ($conexion->inTransaction()) {
+                $conexion->rollBack();
+            }
+
+            // Error por clave duplicada
+            if (
+                isset($e->errorInfo[0]) &&
+                $e->errorInfo[0] === "23000"
+            ) {
+                $error = "Rol ya existente en la base de datos, verifique.";
             } else {
                 $error = "Error al agregar el rol.";
             }
+
+        } catch (Exception $e) {
+            if ($conexion->inTransaction()) {
+                $conexion->rollBack();
+            }
+
+            $error = "Error al registrar la auditoría del rol.";
         }
     }
 }
+
 ?>
 
 <!DOCTYPE html>

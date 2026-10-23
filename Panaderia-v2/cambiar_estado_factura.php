@@ -1,86 +1,156 @@
 <?php
 session_start();
+require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
+// Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
     header("Location: login.php");
     exit;
 }
 
-require_once "conexion.php";
 $mensaje = "";
 $error = "";
 $id_factura_seleccionada = "";
 $estado_seleccionado = "";
 
+
 /* =========================================================
-   CAMBIAR ESTADO DE LA FACTURA
+   CAMBIAR ESTADO DE LA FACTURA Y REGISTRAR AUDITORÍA
    ========================================================= */
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $id_factura = $_POST["id_factura"] ?? "";
     $estado = $_POST["estado"] ?? "";
+
     $id_factura_seleccionada = $id_factura;
     $estado_seleccionado = $estado;
+
     $estados_validos = ["Pendiente", "Cobrado", "Anulada"];
 
-    /* Verificar factura */
-    if ($id_factura === "" || !is_numeric($id_factura)) {
+    if (
+        $id_factura === "" ||
+        !ctype_digit((string)$id_factura) ||
+        (int)$id_factura <= 0
+    ) {
         $error = "Debés seleccionar una factura.";
+
     } elseif (!in_array($estado, $estados_validos, true)) {
         $error = "El estado seleccionado no es válido.";
 
     } else {
-
         try {
-            /* Buscar la factura */
-            $sql = "SELECT id, estado FROM factura WHERE id = :id";
+            // Obtener los datos actuales de la factura
+            $sql = "
+                SELECT
+                    f.id,
+                    f.numero_serie,
+                    f.monto,
+                    f.estado,
+                    f.id_usuario_asignado,
+                    u.usuario AS nombre_asignado
+                FROM factura f
+                LEFT JOIN usuario u
+                    ON f.id_usuario_asignado = u.id
+                WHERE f.id = ?
+            ";
+
             $stmt = $conexion->prepare($sql);
-            $stmt->execute([":id" => $id_factura]);
+            $stmt->execute([$id_factura]);
             $factura = $stmt->fetch(PDO::FETCH_ASSOC);
+
             if (!$factura) {
                 $error = "La factura seleccionada no existe.";
 
             } else {
-                /* =====================================================
-                   SI LA FACTURA PASA A COBRADO
-                   SE GUARDA LA FECHA Y HORA ACTUAL DE MYSQL
-                   ===================================================== */
-                if ($estado === "Cobrado") {
-                    $sql = "UPDATE factura SET estado = :estado, fecha_cobro = NOW() WHERE id = :id";
-                    $stmt = $conexion->prepare($sql);
-                    $stmt->execute([ ":estado" => $estado, ":id" => $id_factura]);
-                }
+                $estadoAnterior = $factura["estado"];
+                $nombreAsignado = $factura["nombre_asignado"]
+                    ?? "Sin asignar";
 
-                /* =====================================================
-                   SI PASA A PENDIENTE O ANULADA
-                   SE ELIMINA LA FECHA DE COBRO
-                   ===================================================== */
-                else {
-                    $sql = "UPDATE factura SET estado = :estado, fecha_cobro = NULL WHERE id = :id";
-                    $stmt = $conexion->prepare($sql);
-                    $stmt->execute([":estado" => $estado, ":id" => $id_factura]);
-                }
-                /* Verificar que realmente se modificó */
-                if ($stmt->rowCount() > 0) {
-                    $mensaje = "Estado de la factura actualizado correctamente.";
+                // Preparar los valores para la auditoría
+                $valorAnterior =
+                    "Factura: " . $factura["numero_serie"] .
+                    " | Monto: $" . number_format(
+                        (float)$factura["monto"], 2, ",", "."
+                    ) .
+                    " | Estado: " . $estadoAnterior .
+                    " | Asignado a: " . $nombreAsignado;
 
-                } else {
-                    /*
-                     * rowCount() puede devolver 0 si el valor ya era
-                     * el mismo. De todas formas, la operación pudo
-                     * ejecutarse correctamente.
-                     */
-                    $mensaje = "Estado de la factura actualizado correctamente.";
+                $valorNuevo =
+                    "Factura: " . $factura["numero_serie"] .
+                    " | Monto: $" . number_format(
+                        (float)$factura["monto"], 2, ",", "."
+                    ) .
+                    " | Estado: " . $estado .
+                    " | Asignado a: " . $nombreAsignado;
+
+                try {
+                    $conexion->beginTransaction();
+
+                    // Actualizar estado y fecha de cobro
+                    if ($estado === "Cobrado") {
+                        $sql = "
+                            UPDATE factura
+                            SET estado = :estado,
+                                fecha_cobro = NOW()
+                            WHERE id = :id
+                        ";
+                    } else {
+                        $sql = "
+                            UPDATE factura
+                            SET estado = :estado,
+                                fecha_cobro = NULL
+                            WHERE id = :id
+                        ";
+                    }
+
+                    $stmt = $conexion->prepare($sql);
+                    $stmt->execute([
+                        ":estado" => $estado,
+                        ":id" => $id_factura
+                    ]);
+
+                    // Registrar auditoría solo si cambió el estado
+                    if ($estadoAnterior !== $estado) {
+                        registrarAuditoria(
+                            $conexion,
+                            $_SESSION["id_usuario"],
+                            "CAMBIAR ESTADO",
+                            "Factura",
+                            $factura["id"],
+                            "Se cambió el estado de la factura " .
+                                $factura["numero_serie"] .
+                                " de " . $estadoAnterior .
+                                " a " . $estado,
+                            $valorAnterior,
+                            $valorNuevo
+                        );
+                    }
+
+                    $conexion->commit();
+
+                    $mensaje = ($estadoAnterior === $estado)
+                        ? "La factura ya tenía ese estado."
+                        : "Estado de la factura actualizado correctamente.";
+
+                    // Limpiar formulario después de procesar
+                    $id_factura_seleccionada = "";
+                    $estado_seleccionado = "";
+
+                } catch (Exception $e) {
+                    if ($conexion->inTransaction()) {
+                        $conexion->rollBack();
+                    }
+
+                    $error = "Error al actualizar el estado de la factura.";
                 }
-                /* Limpiar formulario después de actualizar */
-                $id_factura_seleccionada = "";
-                $estado_seleccionado = "";
             }
 
         } catch (PDOException $e) {
-            $error = "Error al actualizar la factura: " . $e->getMessage();
+            $error = "Error al consultar la factura.";
         }
     }
 }
+
 
 /* =========================================================
    OBTENER LAS FACTURAS

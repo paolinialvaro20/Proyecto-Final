@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 // Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
@@ -19,16 +20,15 @@ $id_factura_editar = $_GET["id"] ?? $_POST["id_factura"] ?? "";
 // OBTENER USUARIOS ACTIVOS
 // =====================================================
 $sqlUsuarios = "SELECT id, usuario FROM usuario WHERE activo = 1 ORDER BY usuario";
-
 $stmtUsuarios = $conexion->prepare($sqlUsuarios);
 $stmtUsuarios->execute();
 $usuarios = $stmtUsuarios->fetchAll(PDO::FETCH_ASSOC);
 
 
-// =====================================================
-// PROCESAR FORMULARIO
-// =====================================================
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+ // =====================================================
+ // PROCESAR FORMULARIO
+ // =====================================================
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $id_factura = $_POST["id_factura"] ?? "";
     $numero_serie = trim($_POST["numero_serie"] ?? "");
@@ -37,116 +37,149 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $estado = $_POST["estado"] ?? "";
     $id_usuario_asignado = $_POST["id_usuario_asignado"] ?? "";
 
-
-    // -------------------------------------------------
-    // Validar campos obligatorios
-    // -------------------------------------------------
     if (
-        $id_factura == "" ||
-        $numero_serie == "" ||
-        $monto == "" ||
-        $estado == ""
+        $id_factura === "" ||
+        !ctype_digit((string)$id_factura) ||
+        (int)$id_factura <= 0 ||
+        $numero_serie === "" ||
+        $monto === "" ||
+        $estado === ""
     ) {
         $mensaje = "Debe completar todos los campos obligatorios.";
 
-    } else {
-        // -------------------------------------------------
-        // Validar monto
-        // -------------------------------------------------
-        if (!is_numeric($monto) || $monto < 0) {
-            $mensaje = "El monto ingresado no es válido.";
+    } elseif (!is_numeric($monto) || (float)$monto < 0) {
+        $mensaje = "El monto ingresado no es válido.";
 
-        } else {
-            // -------------------------------------------------
-            // Validar estado
-            // -------------------------------------------------
-            $estadosPermitidos = ["Cobrado", "Pendiente", "Anulada"];
-            if (!in_array($estado, $estadosPermitidos)) {
-                $mensaje = "El estado seleccionado no es válido.";
+    } elseif (!in_array($estado, ["Cobrado", "Pendiente", "Anulada"], true)) {
+        $mensaje = "El estado seleccionado no es válido.";
+
+    } else {
+        try {
+            // Obtener los datos anteriores de la factura
+            $sqlAnterior = "
+                SELECT f.*, u.usuario AS nombre_asignado
+                FROM factura f
+                LEFT JOIN usuario u ON f.id_usuario_asignado = u.id
+                WHERE f.id = ?
+            ";
+
+            $stmtAnterior = $conexion->prepare($sqlAnterior);
+            $stmtAnterior->execute([$id_factura]);
+            $facturaAnterior = $stmtAnterior->fetch(PDO::FETCH_ASSOC);
+
+            if (!$facturaAnterior) {
+                $mensaje = "La factura seleccionada no existe.";
 
             } else {
-                // -------------------------------------------------
                 // Validar usuario asignado
-                // -------------------------------------------------
-                if ($id_usuario_asignado != "") {
-                    $sqlVerificarUsuario = "SELECT id FROM usuario WHERE id = ? AND activo = 1";
+                if ($id_usuario_asignado !== "") {
+                    $sqlVerificarUsuario = "
+                        SELECT id, usuario
+                        FROM usuario
+                        WHERE id = ? AND activo = 1
+                    ";
 
                     $stmtVerificarUsuario = $conexion->prepare($sqlVerificarUsuario);
                     $stmtVerificarUsuario->execute([$id_usuario_asignado]);
-                    $usuarioExiste = $stmtVerificarUsuario->fetch(PDO::FETCH_ASSOC);
-                    if (!$usuarioExiste) {
+                    $usuarioNuevo = $stmtVerificarUsuario->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$usuarioNuevo) {
                         $mensaje = "El usuario asignado no existe o está inactivo.";
                     }
+                } else {
+                    $usuarioNuevo = null;
                 }
 
-                // -------------------------------------------------
-                // Continuar si no hubo errores
-                // -------------------------------------------------
-                if ($mensaje == "") {
-
-                    // -------------------------------------------------
-                    // Fecha de cobro
-                    // -------------------------------------------------
-                    if ($estado == "Cobrado") {
-                        /*
-                         * Si la factura está cobrada:
-                         *
-                         * - Si se ingresó una fecha, se utiliza.
-                         * - Si está vacía, se utiliza la fecha y hora actual.
-                         */
-                        if ($fecha_cobro == "") {
+                if ($mensaje === "") {
+                    // Determinar fecha de cobro
+                    if ($estado === "Cobrado") {
+                        if ($fecha_cobro === "") {
                             $fecha_cobro = date("Y-m-d H:i:s");
-
                         } else {
-                            // Convertir formato datetime-local
-                            $fecha_cobro = str_replace(
-                                "T",
-                                " ",
-                                $fecha_cobro
-                            );
+                            $fecha_cobro = str_replace("T", " ", $fecha_cobro);
 
-                            // Agregar segundos si no existen
-                            if (strlen($fecha_cobro) == 16) {
+                            if (strlen($fecha_cobro) === 16) {
                                 $fecha_cobro .= ":00";
                             }
                         }
-
                     } else {
-                        /*
-                         * Si está Pendiente o Anulada,
-                         * no debe existir fecha de cobro.
-                         */
                         $fecha_cobro = null;
                     }
 
-                    // -------------------------------------------------
-                    // Actualizar factura
-                    // -------------------------------------------------
-                    $sql = "UPDATE factura
-                             SET numero_serie = ?, monto = ?, fecha_cobro = ?, estado = ?, id_usuario_asignado = ?
-                            WHERE id = ?";
+                    $nombreAsignadoAnterior =
+                        $facturaAnterior["nombre_asignado"] ?? "Sin asignar";
 
-                    $stmt = $conexion->prepare($sql);
-                    $resultado = $stmt->execute([
-                        $numero_serie,
-                        $monto,
-                        $fecha_cobro,
-                        $estado,
-                        ($id_usuario_asignado != "")
-                            ? $id_usuario_asignado
-                            : null,
-                        $id_factura
-                    ]);
+                    $nombreAsignadoNuevo =
+                        $usuarioNuevo["usuario"] ?? "Sin asignar";
 
-                    if ($resultado) {
+                    // Formato de los valores para la auditoría
+                    $valorAnterior =
+                        "Factura: " . $facturaAnterior["numero_serie"] .
+                        " | Monto: $" . number_format((float)$facturaAnterior["monto"], 2, ",", ".") .
+                        " | Estado: " . $facturaAnterior["estado"] .
+                        " | Asignado a: " . $nombreAsignadoAnterior;
+
+                    $valorNuevo =
+                        "Factura: " . $numero_serie .
+                        " | Monto: $" . number_format((float)$monto, 2, ",", ".") .
+                        " | Estado: " . $estado .
+                        " | Asignado a: " . $nombreAsignadoNuevo;
+
+                    try {
+                        $conexion->beginTransaction();
+
+                        // Actualizar factura
+                        $sql = "
+                            UPDATE factura
+                            SET numero_serie = ?,
+                                monto = ?,
+                                fecha_cobro = ?,
+                                estado = ?,
+                                id_usuario_asignado = ?
+                            WHERE id = ?
+                        ";
+
+                        $stmt = $conexion->prepare($sql);
+                        $stmt->execute([
+                            $numero_serie,
+                            $monto,
+                            $fecha_cobro,
+                            $estado,
+                            ($id_usuario_asignado !== "")
+                                ? $id_usuario_asignado
+                                : null,
+                            $id_factura
+                        ]);
+
+                        // Registrar auditoría
+                        registrarAuditoria(
+                            $conexion,
+                            $_SESSION["id_usuario"],
+                            "EDITAR",
+                            "Factura",
+                            $id_factura,
+                            "Se modificó la factura " . $numero_serie,
+                            $valorAnterior,
+                            $valorNuevo
+                        );
+
+                        $conexion->commit();
+
                         $mensaje = "Factura actualizada correctamente.";
                         $id_factura_editar = $id_factura;
 
-                    } else {
+                    } catch (Exception $e) {
+                        if ($conexion->inTransaction()) {
+                            $conexion->rollBack();
+                        }
+
                         $mensaje = "Error al actualizar la factura.";
                     }
                 }
             }
+
+        } catch (PDOException $e) {
+            $mensaje = "Error al consultar los datos de la factura.";
         }
     }
 }

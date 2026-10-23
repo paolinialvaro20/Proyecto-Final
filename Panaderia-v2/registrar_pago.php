@@ -35,9 +35,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         "Efectivo",
         "Transferencia",
         "Debito",
-        "Credito"
+        "Credito",
+        "Cheque"
     ];
-
     // =================================================
     // VALIDACIONES
     // =================================================
@@ -147,10 +147,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $stmtActualizarFactura = $conexion->prepare($sqlActualizarFactura);
             $stmtActualizarFactura->execute([":id" => $id_factura]);
 
+            
             // =========================================
             // REGISTRAR AUDITORÍA
             // =========================================
-
             $asignadoA = $factura["usuario_asignado"]
                 ?? "Sin asignar";
 
@@ -158,14 +158,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 "Factura: " . $factura["numero_serie"] .
                 " | Asignada a: " . $asignadoA .
                 " | Cobrado por: " . $usuarioCobro["usuario"] .
-                " | Monto: $" . $factura["monto"] .
+                " | Monto: $" . number_format(
+                    (float)$factura["monto"], 2, ".", ""
+                ) .
                 " | Forma de pago: " . $forma_pago .
                 " | Liquidado: No";
 
             registrarAuditoria(
                 $conexion,
                 $_SESSION["id_usuario"],
-                "REGISTRAR PAGO",
+                "REGISTRAR",
                 "Pago",
                 $id_pago,
                 "Se registró el pago de la factura " .
@@ -175,6 +177,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 "Factura pendiente de cobro",
                 $valorNuevo
             );
+
 
             // Confirmar transacción
             $conexion->commit();
@@ -356,6 +359,13 @@ try {
                                                 ? "selected" : "" ?>
                                         >
                                             Crédito
+                                        </option>
+                                        <option
+                                            value="Cheque"
+                                            <?= $forma_pago_seleccionada === "Cheque"
+                                                ? "selected" : "" ?>
+                                        >
+                                            Cheque
                                         </option>
                                     </select>
                                 </div>

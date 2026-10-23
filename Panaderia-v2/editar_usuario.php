@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 // Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
@@ -67,33 +68,150 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if (!$rolExiste) {
                 $mensaje = "El rol seleccionado no existe.";
             } else {
+                
                 // =================================================
-                // ACTUALIZAR USUARIO
+                // OBTENER LOS DATOS ANTERIORES DEL USUARIO
                 // =================================================
-                /*
-                 * Si se escribe una nueva contraseña,
-                 * se actualiza.
-                 *
-                 * Si se deja vacía, se conserva
-                 * la contraseña actual.
-                 */
-                if ($contrasenia != "") {
-                    $contraseniaHash = password_hash($contrasenia, PASSWORD_DEFAULT);
-                    $sql = "UPDATE usuario SET usuario = ?, contrasenia = ?, activo = ?, id_ROL = ? WHERE id = ?";
-                    $stmt = $conexion->prepare($sql);
-                    $resultado = $stmt->execute([$usuario, $contraseniaHash, $activo, $id_ROL, $id_usuario]);
+                $sqlAnterior = "SELECT
+                                    u.id,
+                                    u.usuario,
+                                    u.activo,
+                                    u.id_ROL,
+                                    r.nombre AS nombre_rol
+                                FROM usuario u
+                                LEFT JOIN rol r ON u.id_ROL = r.id
+                                WHERE u.id = ?";
+
+                $stmtAnterior = $conexion->prepare($sqlAnterior);
+                $stmtAnterior->execute([$id_usuario]);
+                $datosAnteriores = $stmtAnterior->fetch(PDO::FETCH_ASSOC);
+
+                if (!$datosAnteriores) {
+                    $mensaje = "El usuario que intenta editar no existe.";
                 } else {
-                    $sql = "UPDATE usuario SET usuario = ?, activo = ?, id_ROL = ? WHERE id = ?";
-                    $stmt = $conexion->prepare($sql);
-                    $resultado = $stmt->execute([$usuario, $activo, $id_ROL, $id_usuario]);
+
+                    // Obtener el nombre del nuevo rol
+                    $sqlNuevoRol = "SELECT nombre FROM rol WHERE id = ?";
+                    $stmtNuevoRol = $conexion->prepare($sqlNuevoRol);
+                    $stmtNuevoRol->execute([$id_ROL]);
+                    $nuevoRol = $stmtNuevoRol->fetchColumn();
+
+                    // Preparar los valores para la auditoría
+                    $cambios = [];
+                    $valoresAnteriores = [];
+                    $valoresNuevos = [];
+
+                    // Comparar nombre de usuario
+                    if ($datosAnteriores["usuario"] !== $usuario) {
+                        $cambios[] = "nombre de usuario";
+                        $valoresAnteriores[] =
+                            "Usuario: " . $datosAnteriores["usuario"];
+                        $valoresNuevos[] = "Usuario: " . $usuario;
+                    }
+
+                    // Comparar rol
+                    if ((string)$datosAnteriores["id_ROL"] !== (string)$id_ROL) {
+                        $cambios[] = "rol";
+                        $valoresAnteriores[] =
+                            "Rol: " . $datosAnteriores["nombre_rol"];
+                        $valoresNuevos[] = "Rol: " . $nuevoRol;
+                    }
+
+                    // Comparar estado
+                    if ((int)$datosAnteriores["activo"] !== (int)$activo) {
+                        $cambios[] = "estado";
+                        $valoresAnteriores[] =
+                            "Estado: " .
+                            ((int)$datosAnteriores["activo"] === 1
+                                ? "Activo" : "Inactivo");
+
+                        $valoresNuevos[] =
+                            "Estado: " .
+                            ((int)$activo === 1
+                                ? "Activo" : "Inactivo");
+                    }
+
+                    // Registrar si se ingresó una nueva contraseña
+                    if ($contrasenia !== "") {
+                        $cambios[] = "contraseña";
+                        $valoresAnteriores[] = "Contraseña: anterior";
+                        $valoresNuevos[] = "Contraseña: modificada";
+                    }
+
+                    try {
+                        // Iniciar transacción
+                        $conexion->beginTransaction();
+
+                        // Actualizar usuario
+                        if ($contrasenia !== "") {
+                            $contraseniaHash = password_hash(
+                                $contrasenia,
+                                PASSWORD_DEFAULT
+                            );
+
+                            $sql = "UPDATE usuario
+                                    SET usuario = ?, contrasenia = ?,
+                                        activo = ?, id_ROL = ?
+                                    WHERE id = ?";
+
+                            $stmt = $conexion->prepare($sql);
+                            $resultado = $stmt->execute([
+                                $usuario,
+                                $contraseniaHash,
+                                $activo,
+                                $id_ROL,
+                                $id_usuario
+                            ]);
+                        } else {
+                            $sql = "UPDATE usuario
+                                    SET usuario = ?, activo = ?, id_ROL = ?
+                                    WHERE id = ?";
+
+                            $stmt = $conexion->prepare($sql);
+                            $resultado = $stmt->execute([
+                                $usuario,
+                                $activo,
+                                $id_ROL,
+                                $id_usuario
+                            ]);
+                        }
+
+                        if (!$resultado) {
+                            throw new Exception(
+                                "No se pudo actualizar el usuario."
+                            );
+                        }
+
+                        // Registrar auditoría solo si hubo cambios
+                        if (!empty($cambios)) {
+                            registrarAuditoria(
+                                $conexion,
+                                $_SESSION["id_usuario"],
+                                "EDITAR",
+                                "Usuario",
+                                $id_usuario,
+                                "Se modificó el usuario " . $usuario,
+                                implode(" | ", $valoresAnteriores),
+                                implode(" | ", $valoresNuevos)
+                            );
+                        }
+
+                        // Confirmar los cambios
+                        $conexion->commit();
+
+                        $mensaje = "Usuario actualizado correctamente.";
+                        $id_usuario_editar = $id_usuario;
+
+                    } catch (Exception $e) {
+
+                        if ($conexion->inTransaction()) {
+                            $conexion->rollBack();
+                        }
+
+                        $mensaje = "Error al actualizar el usuario.";
+                    }
                 }
 
-                if ($resultado) {
-                    $mensaje = "Usuario actualizado correctamente.";
-                    $id_usuario_editar = $id_usuario;
-                } else {
-                    $mensaje = "Error al actualizar el usuario.";
-                }
             }
         }
     }

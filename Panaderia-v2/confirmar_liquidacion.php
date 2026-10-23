@@ -213,56 +213,42 @@ try {
     // =================================================
     // REGISTRAR CADA PAGO EN AUDITORÍA
     // =================================================
-
     foreach ($pagos as $pago) {
 
+        $valorNuevo =
+            "Factura: " . $pago["numero_serie"] .
+            " | Repartidor: " . $repartidor["usuario"] .
+            " | Monto: $" . number_format(
+                (float)$pago["monto"], 2, ".", ""
+            ) .
+            " | Forma de pago: " . $pago["forma_pago"] .
+            " | Liquidado: Sí";
 
         registrarAuditoria(
-
             $conexion,
-
-            // Usuario que confirmó la liquidación
             $_SESSION["id_usuario"],
-
-            // Acción
             "LIQUIDAR",
-
-            // Entidad
             "Pago",
-
-            // ID del pago
             $pago["id"],
-
-            // Descripción
             "Se liquidó el pago de la factura " .
-            $pago["numero_serie"] .
-            " correspondiente al repartidor " .
-            $repartidor["usuario"],
-
-            // Valor anterior
+                $pago["numero_serie"] .
+                " correspondiente al repartidor " .
+                $repartidor["usuario"],
             "Liquidado: No",
-
-            // Valor nuevo
-            "Liquidado: Sí | Fecha de liquidación: " .
-            $fecha .
-            " | Monto: $" .
-            $pago["monto"]
+            $valorNuevo
         );
-
     }
 
 
     // =================================================
     // CONFIRMAR TRANSACCIÓN
     // =================================================
-
     $conexion->commit();
 
 
     // =================================================
     // IR A PANTALLA DE RESULTADO
     // =================================================
-
     header(
         "Location: liquidacion_confirmada.php?" .
         "id_repartidor=" .
