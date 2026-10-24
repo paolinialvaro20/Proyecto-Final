@@ -25,6 +25,7 @@ $total_efectivo = 0;
 $total_transferencia = 0;
 $total_credito = 0;
 $total_debito = 0;
+$total_cheque = 0;
 
 // =====================================================
 // OBTENER REPARTIDORES ACTIVOS
@@ -77,6 +78,9 @@ if (
                 case "Debito":
                     $total_debito += $monto;
                     break;
+                case "Cheque":
+                    $total_cheque += $monto;
+                    break;
             }
         }
     } catch (PDOException $e) {
@@ -91,7 +95,7 @@ if (
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liquidación confirmada</title>
+    <title>Liquidación diaria</title>
     <!-- Bootstrap -->
     <link rel="stylesheet" href="css/bootstrap-5.3.8/css/bootstrap.min.css">
     <!-- Bootstrap Icons -->
@@ -200,27 +204,54 @@ if (
                                     <?php foreach ($pagos as $pago): ?>
                                         <tr>
                                             <td class="text-center"><?= htmlspecialchars($pago["id"]) ?></td>
-                                            <td><?= htmlspecialchars($pago["numero_serie"]) ?></td>
+                                            <td class="text-center fw-bold"><?= htmlspecialchars($pago["numero_serie"]) ?></td>
                                             <td><?= htmlspecialchars($pago["fecha_hora"]) ?></td>
                                             <td class="text-center">
-                                                <?php
-                                                $formaPago = $pago["forma_pago"];
-                                                $claseBadge = match ($formaPago) {
-                                                    "Efectivo" => "bg-success",
-                                                    "Transferencia" => "bg-primary",
-                                                    "Credito" => "bg-info text-dark",
-                                                    "Debito" => "bg-warning text-dark",
-                                                    default => "bg-secondary"
-                                                };
+                                            <?php
+                                            // Configurar la presentación de la forma de pago
+                                            switch ($pago["forma_pago"]) {
+                                                case "Efectivo":
+                                                    $clase = "bg-success";
+                                                    $icono = "bi-cash";
+                                                    $nombre = "Efectivo";
+                                                    break;
 
-                                                $nombreFormaPago = match ($formaPago) {
-                                                    "Credito" => "Crédito",
-                                                    "Debito" => "Débito",
-                                                    default => $formaPago
-                                                };
-                                                ?>
+                                                case "Transferencia":
+                                                    $clase = "bg-primary";
+                                                    $icono = "bi-bank";
+                                                    $nombre = "Transferencia";
+                                                    break;
 
-                                                <span class="badge <?= $claseBadge ?>"><?= htmlspecialchars($nombreFormaPago) ?></span>
+                                                case "Debito":
+                                                    $clase = "bg-info text-dark";
+                                                    $icono = "bi-credit-card";
+                                                    $nombre = "Débito";
+                                                    break;
+
+                                                case "Credito":
+                                                    $clase = "bg-secondary";
+                                                    $icono = "bi-credit-card-2-front";
+                                                    $nombre = "Crédito";
+                                                    break;
+
+                                                case "Cheque":
+                                                    $clase = "bg-warning text-dark";
+                                                    $icono = "bi-file-earmark-text";
+                                                    $nombre = "Cheque";
+                                                    break;
+
+                                                default:
+                                                    $clase = "bg-dark";
+                                                    $icono = "bi-wallet2";
+                                                    $nombre = $pago["forma_pago"];
+                                                    break;
+                                            }
+                                            ?>
+                                            <span class="badge <?= $clase ?>">
+                                                <i class="bi <?= $icono ?>"></i>
+                                                <?= htmlspecialchars($nombre) ?>
+                                            </span>
+
                                             </td>
                                             <td class="text-end text-nowrap">
                                                 $<?= number_format($pago["monto"], 2, ",", ".") ?>
@@ -234,11 +265,14 @@ if (
                         <!-- =================================
                             RESUMEN DE PAGOS
                             ================================= -->
-                        <h5 class="mt-4 mb-3"><i class="bi bi-bar-chart-fill"></i> Resumen de la liquidación</h5>
+                        <h5 class="mt-4 mb-3">
+                            <i class="bi bi-bar-chart-fill"></i> Resumen de la liquidación
+                        </h5>
+
                         <div class="row g-3">
 
                             <!-- Efectivo -->
-                            <div class="col-sm-6 col-lg-3">
+                            <div class="col">
                                 <div class="card border-success h-100">
                                     <div class="card-body">
                                         <div class="text-success mb-2">
@@ -253,7 +287,7 @@ if (
                             </div>
 
                             <!-- Transferencia -->
-                            <div class="col-sm-6 col-lg-3">
+                            <div class="col">
                                 <div class="card border-primary h-100">
                                     <div class="card-body">
                                         <div class="text-primary mb-2">
@@ -267,36 +301,53 @@ if (
                                 </div>
                             </div>
 
-                            <!-- Crédito -->
-                            <div class="col-sm-6 col-lg-3">
+                            <!-- Débito -->
+                            <div class="col">
                                 <div class="card border-info h-100">
                                     <div class="card-body">
                                         <div class="text-info mb-2">
                                             <i class="bi bi-credit-card fs-3"></i>
                                         </div>
-                                        <h6 class="text-muted">Total crédito</h6>
+                                        <h6 class="text-muted">Total débito</h6>
                                         <h5 class="mb-0 text-info">
+                                            $<?= number_format($total_debito, 2, ",", ".") ?>
+                                        </h5>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Crédito -->
+                            <div class="col">
+                                <div class="card border-secondary h-100">
+                                    <div class="card-body">
+                                        <div class="text-secondary mb-2">
+                                            <i class="bi bi-credit-card-2-front fs-3"></i>
+                                        </div>
+                                        <h6 class="text-muted">Total crédito</h6>
+                                        <h5 class="mb-0 text-secondary">
                                             $<?= number_format($total_credito, 2, ",", ".") ?>
                                         </h5>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Débito -->
-                            <div class="col-sm-6 col-lg-3">
+                            <!-- Cheque -->
+                            <div class="col">
                                 <div class="card border-warning h-100">
                                     <div class="card-body">
                                         <div class="text-warning mb-2">
-                                            <i class="bi bi-credit-card-2-front fs-3"></i>
+                                            <i class="bi bi-file-earmark-text fs-3"></i>
                                         </div>
-                                        <h6 class="text-muted">Total débito</h6>
+                                        <h6 class="text-muted">Total cheque</h6>
                                         <h5 class="mb-0 text-dark">
-                                            $<?= number_format($total_debito, 2, ",", ".") ?>
+                                            $<?= number_format($total_cheque, 2, ",", ".") ?>
                                         </h5>
                                     </div>
                                 </div>
                             </div>
+
                         </div>
+
 
                         <!-- Total general -->
                         <div class="card bg-light border-dark mt-4">

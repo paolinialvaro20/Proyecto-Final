@@ -163,7 +163,7 @@ if (isset($_SESSION["id_usuario"])) {
                                 <a href="cambiar_contraseña.php" class="dropdown-item"><i class="bi bi-shield-lock-fill"></i> Cambiar contraseña</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="#"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</a>
+                                <a class="dropdown-item" href="cerrar_sesion.php"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</a>
                             </li>   
                         </ul>
                     </li>

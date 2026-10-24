@@ -9,18 +9,8 @@ if (!isset($_SESSION["id_usuario"])) {
 }
 
 // Obtener los registros de auditoría
-$sql = "SELECT
-            a.id,
-            u.usuario,
-            a.accion,
-            a.entidad,
-            a.id_entidad,
-            a.descripcion,
-            a.valor_anterior,
-            a.valor_nuevo,
-            a.fecha_hora
-        FROM auditoria a
-        LEFT JOIN usuario u ON a.id_usuario = u.id
+$sql = "SELECT a.id, u.usuario, a.accion, a.entidad, a.id_entidad, a.descripcion, a.valor_anterior, a.valor_nuevo, a.fecha_hora
+        FROM auditoria a LEFT JOIN usuario u ON a.id_usuario = u.id
         ORDER BY a.fecha_hora DESC, a.id DESC";
 
 $stmt = $conexion->prepare($sql);
@@ -34,17 +24,13 @@ $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auditoría del sistema</title>
-
     <!-- Bootstrap 5.3.8 -->
     <link rel="stylesheet" href="css/bootstrap-5.3.8/css/bootstrap.min.css">
-
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="imagenes/bootstrap-icons-1.13.1/bootstrap-icons.min.css">
-
     <!-- Estilos propios -->
     <link rel="stylesheet" href="css/estilo.css">
 </head>
-
 <body>
     <?php require_once "menu.php"; ?>
 
@@ -52,9 +38,7 @@ $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         <!-- Botón para volver -->
         <div class="mt-4 mb-2">
-            <a href="index.php" class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i> Volver al inicio
-            </a>
+            <a href="index.php" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver al inicio</a>
         </div>
 
         <!-- Tarjeta principal -->
@@ -62,10 +46,7 @@ $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             <!-- Encabezado -->
             <div class="card-header bg-dark text-white text-center">
-                <h4 class="mb-0">
-                    <i class="bi bi-journal-text"></i>
-                    Registro de auditoría
-                </h4>
+                <h4 class="mb-0"><i class="bi bi-journal-text"></i> Registro de auditoría</h4>
             </div>
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
@@ -133,8 +114,6 @@ $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             $claseAccion = "bg-dark";
                                             break;
                                     }
-
-
                                     $fecha = new DateTime($registro["fecha_hora"]);
                                     ?>
 

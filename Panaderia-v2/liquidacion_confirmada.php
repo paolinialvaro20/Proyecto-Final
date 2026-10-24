@@ -26,6 +26,7 @@ $totalEfectivo = 0;
 $totalTransferencia = 0;
 $totalCredito = 0;
 $totalDebito = 0;
+$totalCheque = 0;
 
 try {
     $sql = "SELECT usuario FROM usuario WHERE id = :id";
@@ -65,6 +66,9 @@ try {
                 break;
             case "Debito":
                 $totalDebito += $monto;
+                break;
+            case "Cheque":
+                $totalCheque += $monto;
                 break;
         }
     }
@@ -229,6 +233,10 @@ try {
                                     <p>
                                         <strong>Crédito:</strong>
                                         $<?= number_format($totalCredito, 2, ",", ".") ?>
+                                    </p>
+                                    <p>
+                                        <strong>Cheque:</strong>
+                                        $<?= number_format($totalCheque, 2, ",", ".") ?>
                                     </p>
                                 </div>
                                 <hr>
