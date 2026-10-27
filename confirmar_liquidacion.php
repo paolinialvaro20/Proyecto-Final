@@ -165,6 +165,42 @@ try {
 
 
     // =================================================
+    // VERIFICAR FORMAS DE PAGO
+    // =================================================
+
+    $formas_validas = [
+        "Efectivo",
+        "Transferencia",
+        "Debito",
+        "Credito"
+    ];
+
+    $pagos_invalidos = [];
+
+    foreach ($pagos as $pago) {
+
+        $forma_pago = trim(
+            (string) $pago["forma_pago"]
+        );
+
+        if (!in_array($forma_pago, $formas_validas, true)) {
+
+            $pagos_invalidos[] = $pago["id"];
+        }
+    }
+
+    // Impedir liquidar pagos sin forma de pago válida
+    if (!empty($pagos_invalidos)) {
+
+        throw new Exception(
+            "No se puede confirmar la liquidación. " .
+            "Los siguientes pagos tienen una forma de pago " .
+            "vacía o incorrecta: " .
+            implode(", ", $pagos_invalidos)
+        );
+    }
+
+    // =================================================
     // CALCULAR TOTAL
     // =================================================
 
@@ -225,7 +261,7 @@ try {
             $_SESSION["id_usuario"],
 
             // Acción
-            "LIQUIDAR",
+            "LIQUIDAR REP",
 
             // Entidad
             "Pago",
