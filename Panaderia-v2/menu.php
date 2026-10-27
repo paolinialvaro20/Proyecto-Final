@@ -125,7 +125,10 @@ if (isset($_SESSION["id_usuario"])) {
                         <a class="nav-link dropdown-toggle fw-bold" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-calculator"></i> Liquidaciones</a>
                         <ul class="dropdown-menu">
                             <li>
-                                <a class="dropdown-item" href="liquidacion_diaria.php"><i class="bi bi-calendar-check"></i> Liquidación diaria</a>
+                                <a class="dropdown-item" href="liquidacion_diaria.php"><i class="bi bi-calendar-check"></i> Liquidación diaria repartidor</a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="liquidacion_diaria_cajero.php"><i class="bi bi-calendar-check"></i> Liquidación diaria cajero</a>
                             </li>
                         </ul>
                     </li> 

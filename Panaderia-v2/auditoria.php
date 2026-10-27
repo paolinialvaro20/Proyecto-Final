@@ -101,7 +101,8 @@ $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             $claseAccion = "bg-danger";
                                             break;
                                             
-                                        case "LIQUIDAR":
+                                        case "LIQUIDACION REPARTIDOR":
+                                         case "LIQUIDACION CAJERO":
                                             $claseAccion = "bg-info text-dark";
                                             break;
                                         
