@@ -1,54 +1,48 @@
+
 <?php
 session_start();
+
 require_once "conexion.php";
 
-// =====================================================
-// VERIFICAR QUE HAYA UN USUARIO LOGUEADO
-// =====================================================
+// VERIFICAR SESIÓN
 if (!isset($_SESSION["id_usuario"])) {
     header("Location: login.php");
     exit;
 }
 
-require_once "menu.php";
 $error = "";
-$auditorias = [];
+$movimientos = [];
 
-// =====================================================
-// OBTENER LOS REGISTROS DE AUDITORÍA
-// =====================================================
 try {
+
+    // CONSULTAR MOVIMIENTOS DE AUDITORÍA
     $sql = "
         SELECT
             a.id,
-            a.id_usuario,
+            a.fecha_hora,
             u.usuario,
             a.accion,
             a.entidad,
             a.id_entidad,
             a.descripcion,
             a.valor_anterior,
-            a.valor_nuevo,
-            a.fecha_hora
+            a.valor_nuevo
         FROM auditoria a
-        INNER JOIN usuario u ON a.id_usuario = u.id
+        LEFT JOIN usuario u
+            ON u.id = a.id_usuario
         ORDER BY a.fecha_hora DESC, a.id DESC
     ";
 
-    $stmt = $conexion->prepare($sql);
-    $stmt->execute();
-
-    $auditorias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $conexion->query($sql);
+    $movimientos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    $error = "No se pudieron cargar los registros de auditoría.";
+
+    $error = "No se pudieron cargar los movimientos de auditoría.";
 }
 
-// =====================================================
-// FUNCIONES PARA MOSTRAR LOS DATOS DE FORMA SEGURA
-// =====================================================
-
-function escapar($valor) {
+// PROTEGER TEXTOS
+function esc($valor) {
     return htmlspecialchars(
         (string)($valor ?? ""),
         ENT_QUOTES,
@@ -56,263 +50,234 @@ function escapar($valor) {
     );
 }
 
-function mostrarValor($valor) {
-    if ($valor === null || $valor === "") {
-        return '<span class="text-muted">Sin datos</span>';
+// FORMATEAR FECHA
+function fechaAuditoria($fecha) {
+    if (empty($fecha)) {
+        return "";
     }
 
-    return escapar($valor);
-}
-
-// =====================================================
-// COLORES SEGÚN LA ACCIÓN REALIZADA
-// =====================================================
-
-function colorAccion($accion) {
-    switch (strtolower($accion)) {
-        case "crear":
-        case "insertar":
-            return "success";
-
-        case "editar":
-        case "actualizar":
-        case "modificar":
-            return "warning";
-
-        case "eliminar":
-        case "borrar":
-            return "danger";
-
-        case "cambiar_estado":
-        case "cambiar estado":
-            return "primary";
-
-        case "login":
-        case "iniciar_sesion":
-            return "info";
-
-        default:
-            return "secondary";
+    try {
+        return (new DateTime($fecha))->format("d/m/Y H:i:s");
+    } catch (Exception $e) {
+        return $fecha;
     }
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
 
     <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+          content="width=device-width, initial-scale=1">
 
-    <title>Auditoría</title>
-    <!-- Bootstrap -->
-    <link rel="stylesheet" href="css/bootstrap-5.3.8/css/bootstrap.min.css">
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="imagenes/bootstrap-icons-1.13.1/bootstrap-icons.min.css">
-    <!-- Estilos propios -->
-    <link rel="stylesheet" href="css/estilo.css">
-    
+    <title>Auditoría - Panadería Don Diego</title>
+
+    <link rel="stylesheet"
+          href="css/bootstrap-5.3.8/css/bootstrap.min.css">
+
+    <link rel="stylesheet"
+          href="imagenes/bootstrap-icons-1.13.1/bootstrap-icons.min.css">
+
+    <link rel="stylesheet"
+          href="css/estilo.css">
+
+    <style>
+        .auditoria-contenedor {
+            max-width: 1400px;
+            margin: 35px auto;
+            padding: 0 15px;
+        }
+
+        .auditoria-tabla {
+            overflow-x: auto;
+            width: 100%;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+
+        .auditoria-tabla table {
+            min-width: 1450px;
+            margin-bottom: 0;
+        }
+
+        .auditoria-tabla th {
+            background-color: #212529;
+            color: white;
+            padding: 14px;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+
+        .auditoria-tabla td {
+            padding: 12px;
+            vertical-align: middle;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .columna-id {
+            min-width: 65px;
+        }
+
+        .columna-fecha {
+            min-width: 155px;
+            white-space: nowrap !important;
+        }
+
+        .columna-usuario {
+            min-width: 140px;
+        }
+
+        .columna-accion {
+            min-width: 220px;
+        }
+
+        .columna-entidad {
+            min-width: 100px;
+        }
+
+        .columna-descripcion {
+            min-width: 240px;
+        }
+
+        .columna-valor {
+            min-width: 260px;
+            max-width: 380px;
+            white-space: pre-wrap !important;
+        }
+
+        .etiqueta-accion {
+            display: inline-block;
+            background: #0d6efd;
+            color: white;
+            padding: 7px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: normal;
+        }
+
+        .texto-ayuda {
+            font-size: 13px;
+            color: #6c757d;
+        }
+    </style>
 </head>
 
 <body>
 
-<div class="container-fluid mt-4">
+<?php require_once "menu.php"; ?>
 
-    <!-- ENCABEZADO -->
+<div class="auditoria-contenedor">
 
-    <div class="d-flex justify-content-between
-                align-items-center flex-wrap gap-2 mb-4">
+    <div class="card shadow">
 
-        <div>
-            <h2>
+        <div class="card-header bg-dark text-white text-center">
+
+            <h4 class="mb-0">
                 <i class="bi bi-journal-text"></i>
-                Registro de auditoría
-            </h2>
+                Registro de Auditoría
+            </h4>
 
-            <p class="text-muted mb-0">
-                Historial de acciones realizadas en el
-                Sistema de Gestión de Deudas.
+        </div>
+
+        <div class="card-body">
+
+            <p class="text-muted">
+                Historial de movimientos realizados
+                en el sistema de Panadería Don Diego.
             </p>
-        </div>
 
-        <div>
-            <a href="facturas.php" class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i>
-                Volver al menú
-            </a>
-        </div>
+            <?php if ($error): ?>
 
-    </div>
-
-    <!-- MENSAJE DE ERROR -->
-
-    <?php if ($error !== ""): ?>
-
-        <div class="alert alert-danger">
-            <i class="bi bi-exclamation-triangle"></i>
-            <?= escapar($error) ?>
-        </div>
-
-    <?php else: ?>
-
-        <!-- TABLA DE AUDITORÍA -->
-
-        <div class="card shadow-sm">
-
-            <div class="card-header bg-dark text-white">
-                <i class="bi bi-clock-history"></i>
-                Historial de operaciones
-            </div>
-
-            <div class="card-body">
-
-                <div class="mb-3">
-                    <span class="badge bg-dark">
-                        Total de registros:
-                        <?= count($auditorias) ?>
-                    </span>
+                <div class="alert alert-danger">
+                    <?= esc($error) ?>
                 </div>
 
-                <div class="table-responsive">
+            <?php elseif (empty($movimientos)): ?>
 
-                    <table class="table table-striped
-                                  table-hover table-bordered
-                                  align-middle">
+                <div class="alert alert-info">
+                    Todavía no hay movimientos registrados.
+                </div>
 
-                        <thead class="table-dark">
+            <?php else: ?>
+
+                <p class="texto-ayuda">
+                    <i class="bi bi-arrows"></i>
+                    Deslizá la tabla hacia los costados
+                    para consultar todas las columnas.
+                </p>
+
+                <div class="auditoria-tabla">
+
+                    <table class="table table-bordered table-striped table-hover align-middle">
+
+                        <thead>
 
                             <tr>
-                                <th>ID</th>
-                                <th>Usuario</th>
-                                <th>Acción</th>
-                                <th>Entidad</th>
-                                <th>ID del registro</th>
-                                <th>Descripción</th>
-                                <th>Valor anterior</th>
-                                <th>Valor nuevo</th>
-                                <th>Fecha y hora</th>
+                                <th class="columna-id">ID</th>
+                                <th class="columna-fecha">Fecha y hora</th>
+                                <th class="columna-usuario">Usuario</th>
+                                <th class="columna-accion">Acción</th>
+                                <th class="columna-entidad">Entidad</th>
+                                <th class="columna-id">ID entidad</th>
+                                <th class="columna-descripcion">Descripción</th>
+                                <th class="columna-valor">Valor anterior</th>
+                                <th class="columna-valor">Valor nuevo</th>
                             </tr>
 
                         </thead>
 
                         <tbody>
 
-                        <?php if (count($auditorias) > 0): ?>
-
-                            <?php foreach ($auditorias as $fila): ?>
+                            <?php foreach ($movimientos as $m): ?>
 
                                 <tr>
 
-                                    <!-- ID DE AUDITORÍA -->
-
                                     <td>
-                                        <?= escapar($fila["id"]) ?>
+                                        <?= esc($m["id"]) ?>
                                     </td>
 
-                                    <!-- USUARIO -->
-
-                                    <td>
-                                        <i class="bi bi-person-circle"></i>
-
-                                        <?= escapar(
-                                            $fila["usuario"]
-                                            ?? ("Usuario #" . $fila["id_usuario"])
-                                        ) ?>
+                                    <td class="columna-fecha">
+                                        <?= esc(fechaAuditoria($m["fecha_hora"])) ?>
                                     </td>
 
-                                    <!-- ACCIÓN -->
+                                    <td>
+                                        <?= esc($m["usuario"] ?? "Sin usuario") ?>
+                                    </td>
 
                                     <td>
-                                        <span class="badge bg-<?= colorAccion(
-                                            $fila["accion"]
-                                        ) ?>">
-                                            <?= escapar($fila["accion"]) ?>
+                                        <span class="etiqueta-accion">
+                                            <?= esc($m["accion"]) ?>
                                         </span>
                                     </td>
 
-                                    <!-- ENTIDAD -->
+                                    <td>
+                                        <?= esc($m["entidad"]) ?>
+                                    </td>
 
                                     <td>
-                                        <span class="badge bg-secondary">
-                                            <?= escapar($fila["entidad"]) ?>
-                                        </span>
+                                        <?= esc($m["id_entidad"]) ?>
                                     </td>
-
-                                    <!-- ID DE LA ENTIDAD -->
 
                                     <td>
-                                        <?= $fila["id_entidad"] !== null
-                                            ? escapar($fila["id_entidad"])
-                                            : '<span class="text-muted">N/A</span>' ?>
+                                        <?= esc($m["descripcion"]) ?>
                                     </td>
 
-                                    <!-- DESCRIPCIÓN -->
-
-                                    <td>
-                                        <?= mostrarValor(
-                                            $fila["descripcion"]
-                                        ) ?>
+                                    <td class="columna-valor">
+                                        <?= esc($m["valor_anterior"]) ?>
                                     </td>
 
-                                    <!-- VALOR ANTERIOR -->
-
-                                    <td style="min-width: 160px;
-                                               max-width: 280px;
-                                               overflow-wrap: anywhere;">
-
-                                        <?= mostrarValor(
-                                            $fila["valor_anterior"]
-                                        ) ?>
-
-                                    </td>
-
-                                    <!-- VALOR NUEVO -->
-
-                                    <td style="min-width: 160px;
-                                               max-width: 280px;
-                                               overflow-wrap: anywhere;">
-
-                                        <?= mostrarValor(
-                                            $fila["valor_nuevo"]
-                                        ) ?>
-
-                                    </td>
-
-                                    <!-- FECHA Y HORA -->
-
-                                    <td style="min-width: 150px;">
-                                        <i class="bi bi-calendar-event"></i>
-
-                                        <?= escapar(
-                                            date(
-                                                "d/m/Y H:i:s",
-                                                strtotime($fila["fecha_hora"])
-                                            )
-                                        ) ?>
+                                    <td class="columna-valor">
+                                        <?= esc($m["valor_nuevo"]) ?>
                                     </td>
 
                                 </tr>
 
                             <?php endforeach; ?>
-
-                        <?php else: ?>
-
-                            <tr>
-                                <td colspan="9"
-                                    class="text-center text-muted py-4">
-
-                                    <i class="bi bi-inbox fs-3"></i>
-
-                                    <p class="mb-0">
-                                        No hay registros de auditoría
-                                        para mostrar.
-                                    </p>
-
-                                </td>
-                            </tr>
-
-                        <?php endif; ?>
 
                         </tbody>
 
@@ -320,16 +285,22 @@ function colorAccion($accion) {
 
                 </div>
 
-            </div>
+                <div class="mt-3 text-end">
+                    <strong>
+                        Total de movimientos:
+                        <?= count($movimientos) ?>
+                    </strong>
+                </div>
+
+            <?php endif; ?>
 
         </div>
 
-    <?php endif; ?>
+    </div>
 
 </div>
 
-
-<!-- JavaScript de Bootstrap 5.3.8 -->
 <script src="js/bootstrap-5.3.8/js/bootstrap.bundle.min.js"></script>
+
 </body>
 </html>
