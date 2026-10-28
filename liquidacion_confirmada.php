@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "permisos.php";
 
 // =====================================================
 // VERIFICAR SESIÓN
@@ -9,6 +10,7 @@ if (!isset($_SESSION["id_usuario"])) {
     header("Location: login.php");
     exit;
 }
+exigirPermisoNoCajero($conexion, $_SESSION["id_usuario"]);
 
 // =====================================================
 // DATOS RECIBIDOS
@@ -26,6 +28,7 @@ $totalEfectivo = 0;
 $totalTransferencia = 0;
 $totalCredito = 0;
 $totalDebito = 0;
+$totalCheque = 0;
 
 try {
     $sql = "SELECT usuario FROM usuario WHERE id = :id";
@@ -49,43 +52,29 @@ try {
     // =============================================
     // CALCULAR TOTALES
     // =============================================
+    foreach ($pagos as $pago) {
+        $monto = (float) $pago["monto"];
+        $totalGeneral += $monto;
 
-foreach ($pagos as $pago) {
-
-    $monto = (float) $pago["monto"];
-    $totalGeneral += $monto;
-
-    $formaPago = trim($pago["forma_pago"]);
-
-    $formaPago = str_replace(
-        ["é", "É"],
-        ["e", "E"],
-        $formaPago
-    );
-
-    $formaPago = strtolower($formaPago);
-
-    switch ($formaPago) {
-
-        case "efectivo":
-            $totalEfectivo += $monto;
-            break;
-
-        case "transferencia":
-            $totalTransferencia += $monto;
-            break;
-
-        case "credito":
-            $totalCredito += $monto;
-            break;
-
-        case "debito":
-            $totalDebito += $monto;
-            break;
+        switch ($pago["forma_pago"]) {
+            case "Efectivo":
+                $totalEfectivo += $monto;
+                break;
+            case "Transferencia":
+                $totalTransferencia += $monto;
+                break;
+            case "Credito":
+                $totalCredito += $monto;
+                break;
+            case "Debito":
+                $totalDebito += $monto;
+                break;
+            case "Cheque":
+                $totalCheque += $monto;
+                break;
+        }
     }
-}
-
- } catch (PDOException $e) {
+} catch (PDOException $e) {
     $error = "No se pudo obtener la información de la liquidación.";
 }
 ?>
@@ -246,6 +235,10 @@ foreach ($pagos as $pago) {
                                     <p>
                                         <strong>Crédito:</strong>
                                         $<?= number_format($totalCredito, 2, ",", ".") ?>
+                                    </p>
+                                    <p>
+                                        <strong>Cheque:</strong>
+                                        $<?= number_format($totalCheque, 2, ",", ".") ?>
                                     </p>
                                 </div>
                                 <hr>

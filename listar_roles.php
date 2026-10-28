@@ -1,12 +1,14 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "permisos.php";
 
 // Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
     header("Location: login.php");
     exit;
 }
+exigirPermisoNoCajero($conexion, $_SESSION["id_usuario"]);
 
 // Obtener los roles registrados
 $sql = "SELECT  id, nombre FROM rol ORDER BY id DESC";

@@ -1,12 +1,16 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 // Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
     header("Location: login.php");
     exit;
 }
+
+require_once "permisos.php";
+exigirPermisoGestionFacturas($conexion, $_SESSION["id_usuario"]);
 
 $mensaje = "";
 
@@ -28,30 +32,84 @@ $stmtUsuarios = $conexion->prepare($sqlUsuarios);
 $stmtUsuarios->execute();
 $usuarios = $stmtUsuarios->fetchAll(PDO::FETCH_ASSOC);
 
-// Procesar formulario
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $numero_serie = trim($_POST["numero_serie"]);
-    $monto = $_POST["monto"];
-    $id_usuario_asignado = $_POST["id_usuario_asignado"];
+ // Procesar formulario
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $numero_serie = trim($_POST["numero_serie"] ?? "");
+    $monto = $_POST["monto"] ?? "";
+    $id_usuario_asignado = $_POST["id_usuario_asignado"] ?? "";
 
     // Determinar estado y fecha de cobro
     if (isset($_POST["cobrado"])) {
         $estado = "Cobrado";
         $fecha_cobro = date("Y-m-d H:i:s");
-
     } else {
         $estado = "Pendiente";
         $fecha_cobro = null;
     }
 
-    $sql = "INSERT INTO factura(numero_serie, monto, fecha_registro, fecha_cobro, estado, id_usuario_registro, id_usuario_asignado) 
-    VALUES(?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $conexion->prepare($sql);
+    try {
+        // Registrar la factura y la auditoría en una transacción
+        $conexion->beginTransaction();
 
-    if ($stmt->execute([$numero_serie, $monto, $fechaRegistro, $fecha_cobro, $estado, $id_usuario_registro, $id_usuario_asignado])) {
+        $sql = "INSERT INTO factura
+                (numero_serie, monto, fecha_registro, fecha_cobro, estado,
+                 id_usuario_registro, id_usuario_asignado)
+                VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+        $stmt = $conexion->prepare($sql);
+        $stmt->execute([
+            $numero_serie,
+            $monto,
+            $fechaRegistro,
+            $fecha_cobro,
+            $estado,
+            $id_usuario_registro,
+            $id_usuario_asignado
+        ]);
+
+        // Obtener el ID de la factura creada
+        $idFacturaNueva = $conexion->lastInsertId();
+
+        // Obtener el nombre del usuario asignado
+        $sqlAsignado = "SELECT usuario FROM usuario WHERE id = ?";
+        $stmtAsignado = $conexion->prepare($sqlAsignado);
+        $stmtAsignado->execute([$id_usuario_asignado]);
+        $usuarioAsignado = $stmtAsignado->fetch(PDO::FETCH_ASSOC);
+
+        $nombreAsignado = $usuarioAsignado
+            ? $usuarioAsignado["usuario"]
+            : "No disponible";
+
+        // Registrar la acción en auditoría
+        registrarAuditoria(
+            $conexion,
+            $id_usuario_registro,
+            "CREAR",
+            "Factura",
+            $idFacturaNueva,
+            "Se creó la factura " . $numero_serie,
+            null,
+            "Factura: " . $numero_serie .
+            " | Monto: $" . number_format((float)$monto, 2, ",", ".") .
+            " | Estado: " . $estado .
+            " | Asignado a: " . $nombreAsignado
+        );
+
+        $conexion->commit();
+
         $mensaje = "Factura agregada correctamente.";
 
-    } else {
+    } catch (PDOException $e) {
+        if ($conexion->inTransaction()) {
+            $conexion->rollBack();
+        }
+
+        $mensaje = "Error al guardar la factura.";
+    } catch (Exception $e) {
+        if ($conexion->inTransaction()) {
+            $conexion->rollBack();
+        }
+
         $mensaje = "Error al guardar la factura.";
     }
 }

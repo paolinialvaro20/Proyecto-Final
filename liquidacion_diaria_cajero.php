@@ -1,150 +1,186 @@
-
 <?php
 session_start();
-require_once 'conexion.php';
+require_once "conexion.php";
 
+// =====================================================
 // VERIFICAR SESIÓN
-if (!isset($_SESSION['id_usuario'])) {
-    header('Location: login.php');
+// =====================================================
+if (!isset($_SESSION["id_usuario"])) {
+    header("Location: login.php");
     exit;
 }
 
+// =====================================================
 // VARIABLES
-$error = '';
+// =====================================================
+$error = "";
 $pagos = [];
-$pagos_sin_forma = [];
 $cajeros = [];
+$id_cajero_seleccionado = $_GET["id_cajero"] ?? "";
+$fecha_seleccionada = $_GET["fecha"] ?? date("Y-m-d");
 
-$totales = [
-    'Efectivo' => 0,
-    'Transferencia' => 0,
-    'Credito' => 0,
-    'Debito' => 0
-];
+// Totales
+$total_general = 0;
+$total_efectivo = 0;
+$total_transferencia = 0;
+$total_credito = 0;
+$total_debito = 0;
+$total_cheque = 0;
 
-$id_cajero = $_GET['id_cajero'] ?? '';
-$fecha = $_GET['fecha'] ?? date('Y-m-d');
-
-// FUNCIONES
-function esc($v) {
-    return htmlspecialchars(
-        (string)$v,
-        ENT_QUOTES,
-        'UTF-8'
-    );
-}
-
-function pesos($n) {
-    return '$' . number_format(
-        (float)$n,
-        2,
-        ',',
-        '.'
-    );
-}
-
+// =====================================================
+// OBTENER CAJEROS ACTIVOS
+// =====================================================
 try {
-
-    // OBTENER CAJEROS ACTIVOS
     $sqlCajeros = "
         SELECT u.id, u.usuario
         FROM usuario u
-        INNER JOIN rol r ON r.id = u.id_ROL
+        INNER JOIN rol r ON u.id_ROL = r.id
         WHERE u.activo = 1
         AND LOWER(r.nombre) IN ('cajero', 'cajera')
         ORDER BY u.usuario
     ";
 
-    $stmt = $conexion->query($sqlCajeros);
-    $cajeros = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmtCajeros = $conexion->prepare($sqlCajeros);
+    $stmtCajeros->execute();
 
-    if ($id_cajero !== '') {
+    $cajeros = $stmtCajeros->fetchAll(PDO::FETCH_ASSOC);
 
+} catch (PDOException $e) {
+    $error = "No se pudieron cargar los cajeros.";
+}
+
+// =====================================================
+// BUSCAR PAGOS PENDIENTES DE LIQUIDACIÓN
+// =====================================================
+if (
+    $id_cajero_seleccionado !== ""
+    && $fecha_seleccionada !== ""
+    && $error === ""
+) {
+    try {
+
+        // =============================================
         // VALIDAR CAJERO Y FECHA
-        $validaFecha = DateTime::createFromFormat(
+        // =============================================
+        $fechaValida = DateTime::createFromFormat(
             '!Y-m-d',
-            $fecha
+            $fecha_seleccionada
         );
 
         if (
-            !ctype_digit((string)$id_cajero) ||
-            (int)$id_cajero < 1 ||
-            !$validaFecha ||
-            $validaFecha->format('Y-m-d') !== $fecha
+            !ctype_digit((string)$id_cajero_seleccionado)
+            || (int)$id_cajero_seleccionado < 1
+            || !$fechaValida
+            || $fechaValida->format("Y-m-d") !== $fecha_seleccionada
         ) {
             throw new Exception(
-                'Seleccioná un cajero y una fecha válidos.'
+                "Seleccioná un cajero y una fecha válidos."
             );
         }
 
-        $ids = array_column($cajeros, 'id');
+        $idsCajeros = array_map(
+            "strval",
+            array_column($cajeros, "id")
+        );
 
         if (!in_array(
-            (string)$id_cajero,
-            array_map('strval', $ids),
+            (string)$id_cajero_seleccionado,
+            $idsCajeros,
             true
         )) {
             throw new Exception(
-                'El cajero seleccionado no está activo.'
+                "El cajero seleccionado no está activo."
             );
         }
 
-        // BUSCAR PAGOS PENDIENTES
+        // =============================================
+        // OBTENER PAGOS PENDIENTES
+        // =============================================
         $sqlPagos = "
             SELECT
                 p.id,
-                f.numero_serie,
-                p.fecha_hora,
+                p.id_factura,
+                p.id_repartidor,
+                p.monto,
                 p.forma_pago,
-                p.monto
+                p.fecha_hora,
+                p.liquidado,
+                f.numero_serie,
+                u.usuario AS nombre_cajero
             FROM pago p
-            INNER JOIN factura f
-                ON f.id = p.id_factura
-            WHERE p.id_repartidor = :id
+            INNER JOIN factura f ON p.id_factura = f.id
+            INNER JOIN usuario u ON p.id_repartidor = u.id
+            WHERE p.id_repartidor = :id_cajero
             AND p.fecha_hora >= :inicio
             AND p.fecha_hora < :fin
             AND p.liquidado = 0
-            ORDER BY p.fecha_hora, p.id
+            ORDER BY p.fecha_hora ASC, p.id ASC
         ";
 
-        $inicio = $fecha . ' 00:00:00';
+        $inicio = $fecha_seleccionada . " 00:00:00";
 
-        $fin = (new DateTimeImmutable($fecha))
-            ->modify('+1 day')
-            ->format('Y-m-d') . ' 00:00:00';
+        $fin = (new DateTimeImmutable($fecha_seleccionada))
+            ->modify("+1 day")
+            ->format("Y-m-d") . " 00:00:00";
 
-        $stmt = $conexion->prepare($sqlPagos);
+        $stmtPagos = $conexion->prepare($sqlPagos);
 
-        $stmt->execute([
-            ':id' => $id_cajero,
-            ':inicio' => $inicio,
-            ':fin' => $fin
+        $stmtPagos->execute([
+            ":id_cajero" => $id_cajero_seleccionado,
+            ":inicio" => $inicio,
+            ":fin" => $fin
         ]);
 
-        $pagos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $pagos = $stmtPagos->fetchAll(PDO::FETCH_ASSOC);
 
-        // CALCULAR TOTALES Y DETECTAR ERRORES
-        foreach ($pagos as $p) {
+        // =============================================
+        // CALCULAR TOTALES POR FORMA DE PAGO
+        // =============================================
+        foreach ($pagos as $pago) {
 
-            $forma = trim((string)$p['forma_pago']);
+            $monto = (float)$pago["monto"];
+            $forma = trim((string)$pago["forma_pago"]);
 
-            if (array_key_exists($forma, $totales)) {
+            $total_general += $monto;
 
-                $totales[$forma] += (float)$p['monto'];
+            switch ($forma) {
 
-            } else {
+                case "Efectivo":
+                    $total_efectivo += $monto;
+                    break;
 
-                $pagos_sin_forma[] = $p['id'];
+                case "Transferencia":
+                    $total_transferencia += $monto;
+                    break;
+
+                case "Credito":
+                    $total_credito += $monto;
+                    break;
+
+                case "Debito":
+                    $total_debito += $monto;
+                    break;
+
+                case "Cheque":
+                    $total_cheque += $monto;
+                    break;
+
+                default:
+                    $pagos_sin_forma[] = $pago["id"];
+                    break;
             }
         }
+
+    } catch (Exception $e) {
+        $pagos = [];
+        $pagos_sin_forma = [];
+        $error = $e->getMessage();
+    } catch (PDOException $e) {
+        $pagos = [];
+        $pagos_sin_forma = [];
+        $error = "Error al obtener los pagos del cajero.";
     }
-
-} catch (Exception $e) {
-
-    $error = $e->getMessage();
-    $pagos = [];
 }
-
 ?>
 
 <!DOCTYPE html>
@@ -152,363 +188,494 @@ try {
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>Liquidación diaria de cajeros</title>
 
-    <link rel="stylesheet"
-          href="css/bootstrap-5.3.8/css/bootstrap.min.css">
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="css/bootstrap-5.3.8/css/bootstrap.min.css">
 
-    <link rel="stylesheet"
-          href="imagenes/bootstrap-icons-1.13.1/bootstrap-icons.min.css">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="imagenes/bootstrap-icons-1.13.1/bootstrap-icons.min.css">
 
-    <link rel="stylesheet"
-          href="css/estilo.css">
+    <!-- Estilos propios -->
+    <link rel="stylesheet" href="css/estilo.css">
 </head>
 
 <body>
 
-<?php require_once 'menu.php'; ?>
+    <?php require_once "menu.php"; ?>
 
-<div class="container my-5">
+    <div class="container mt-5 mb-5">
 
-    <!-- FORMULARIO DE BÚSQUEDA -->
-    <div class="card shadow mb-4">
-
-        <div class="card-header bg-dark text-white text-center">
-            <h4 class="mb-0">
-                Liquidación diaria por cajero
-            </h4>
-        </div>
-
-        <div class="card-body">
-
-            <?php if ($error): ?>
-                <div class="alert alert-danger">
-                    <?= esc($error) ?>
-                </div>
-            <?php endif; ?>
-
-            <form method="get"
-                  action="liquidacion_diaria_cajero.php">
-
-                <div class="row g-3 align-items-end">
-
-                    <div class="col-md-6">
-
-                        <label class="form-label">
-                            Cajero
-                        </label>
-
-                        <select
-                            class="form-select"
-                            name="id_cajero"
-                            required
-                        >
-
-                            <option value="">
-                                -- Seleccionar cajero --
-                            </option>
-
-                            <?php foreach ($cajeros as $c): ?>
-
-                                <option
-                                    value="<?= esc($c['id']) ?>"
-                                    <?= (string)$id_cajero ===
-                                        (string)$c['id']
-                                        ? 'selected'
-                                        : '' ?>
-                                >
-                                    <?= esc($c['usuario']) ?>
-                                </option>
-
-                            <?php endforeach; ?>
-
-                        </select>
-                    </div>
-
-                    <div class="col-md-4">
-
-                        <label class="form-label">
-                            Fecha de liquidación
-                        </label>
-
-                        <input
-                            type="date"
-                            name="fecha"
-                            class="form-control"
-                            value="<?= esc($fecha) ?>"
-                            required
-                        >
-                    </div>
-
-                    <div class="col-md-2 d-grid">
-
-                        <button
-                            type="submit"
-                            class="btn btn-primary"
-                        >
-                            Buscar
-                        </button>
-
-                    </div>
-
-                </div>
-            </form>
-
-        </div>
-    </div>
-
-    <?php if ($id_cajero !== '' && !$error): ?>
-
-        <div class="card shadow">
+        <!-- ================================================
+            FORMULARIO DE BÚSQUEDA
+            ================================================ -->
+        <div class="card shadow mb-4">
 
             <div class="card-header bg-dark text-white text-center">
-                <h5 class="mb-0">
-                    Pagos pendientes de liquidación
-                </h5>
+                <h4 class="mb-0">
+                    <i class="bi bi-cash-stack"></i>
+                    Liquidación diaria por cajero
+                </h4>
             </div>
 
             <div class="card-body">
 
-                <p>
-                    <strong>Fecha:</strong>
-                    <?= esc($fecha) ?>
+                <?php if ($error !== ""): ?>
+                    <div class="alert alert-danger" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <?= htmlspecialchars($error, ENT_QUOTES, "UTF-8") ?>
+                    </div>
+                <?php endif; ?>
 
-                    &nbsp;
+                <form method="GET" action="liquidacion_diaria_cajero.php">
 
-                    <strong>Cajero:</strong>
+                    <div class="row g-3 align-items-end">
 
-                    <?php
-                    $nombreCajero = '';
+                        <!-- Cajero -->
+                        <div class="col-md-6">
 
-                    foreach ($cajeros as $c) {
-                        if (
-                            (string)$c['id'] ===
-                            (string)$id_cajero
-                        ) {
-                            $nombreCajero = $c['usuario'];
-                            break;
-                        }
-                    }
-                    ?>
+                            <label for="id_cajero" class="form-label">
+                                <i class="bi bi-person-fill"></i>
+                                Cajero
+                            </label>
 
-                    <?= esc($nombreCajero) ?>
-                </p>
+                            <select
+                                name="id_cajero"
+                                id="id_cajero"
+                                class="form-select"
+                                required
+                            >
+                                <option value="">
+                                    -- Seleccionar cajero --
+                                </option>
 
-                <?php if ($pagos): ?>
-
-                    <!-- TABLA DE PAGOS -->
-                    <div class="table-responsive">
-
-                        <table class="table table-bordered table-hover align-middle">
-
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>ID pago</th>
-                                    <th>Número de factura</th>
-                                    <th>Fecha y hora</th>
-                                    <th>Forma de pago</th>
-                                    <th class="text-end">
-                                        Monto
-                                    </th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-
-                                <?php foreach ($pagos as $p): ?>
-
-                                    <?php
-                                    $forma = trim(
-                                        (string)$p['forma_pago']
-                                    );
-
-                                    $nombreForma = [
-                                        'Credito' => 'Crédito',
-                                        'Debito' => 'Débito'
-                                    ][$forma] ?? $forma;
-
-                                    if (
-                                        !array_key_exists(
-                                            $forma,
-                                            $totales
-                                        )
-                                    ) {
-                                        $nombreForma =
-                                            'Sin identificar';
-                                    }
-                                    ?>
-
-                                    <tr>
-
-                                        <td>
-                                            <?= esc($p['id']) ?>
-                                        </td>
-
-                                        <td>
-                                            <?= esc($p['numero_serie']) ?>
-                                        </td>
-
-                                        <td>
-                                            <?= esc($p['fecha_hora']) ?>
-                                        </td>
-
-                                        <td>
-                                            <?= esc($nombreForma) ?>
-                                        </td>
-
-                                        <td class="text-end">
-                                            <?= pesos($p['monto']) ?>
-                                        </td>
-
-                                    </tr>
-
+                                <?php foreach ($cajeros as $cajero): ?>
+                                    <option
+                                        value="<?= htmlspecialchars((string)$cajero["id"], ENT_QUOTES, "UTF-8") ?>"
+                                        <?= (string)$id_cajero_seleccionado ===
+                                            (string)$cajero["id"] ? "selected" : "" ?>
+                                    >
+                                        <?= htmlspecialchars($cajero["usuario"], ENT_QUOTES, "UTF-8") ?>
+                                    </option>
                                 <?php endforeach; ?>
 
-                            </tbody>
-                        </table>
+                            </select>
+
+                        </div>
+
+                        <!-- Fecha -->
+                        <div class="col-md-4">
+
+                            <label for="fecha" class="form-label">
+                                <i class="bi bi-calendar-event"></i>
+                                Fecha de liquidación
+                            </label>
+
+                            <input
+                                type="date"
+                                name="fecha"
+                                id="fecha"
+                                class="form-control"
+                                value="<?= htmlspecialchars($fecha_seleccionada, ENT_QUOTES, "UTF-8") ?>"
+                                required
+                            >
+
+                        </div>
+
+                        <!-- Botón buscar -->
+                        <div class="col-md-2 d-grid">
+
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-search"></i>
+                                Buscar
+                            </button>
+
+                        </div>
+
                     </div>
 
-                    <!-- RESUMEN -->
-                    <h5 class="mt-4">
-                        Resumen de la liquidación
+                </form>
+
+            </div>
+        </div>
+
+        <!-- ================================================
+            RESULTADOS
+            ================================================ -->
+        <?php if (
+            $id_cajero_seleccionado !== ""
+            && $fecha_seleccionada !== ""
+            && $error === ""
+        ): ?>
+
+            <div class="card shadow mb-4">
+
+                <div class="card-header bg-dark text-white text-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-receipt"></i>
+                        Pagos pendientes de liquidación
                     </h5>
+                </div>
 
-                    <div class="row g-3">
+                <div class="card-body">
 
-                        <?php foreach ($totales as $forma => $monto): ?>
+                    <!-- Fecha y cajero -->
+                    <div class="row mb-3">
 
-                            <div class="col-sm-6 col-lg-3">
+                        <div class="col-md-6">
+                            <strong>
+                                <i class="bi bi-calendar-check"></i>
+                                Fecha:
+                            </strong>
 
-                                <div class="card h-100">
+                            <?= htmlspecialchars($fecha_seleccionada, ENT_QUOTES, "UTF-8") ?>
+                        </div>
 
+                        <?php if (count($pagos) > 0): ?>
+                            <div class="col-md-6">
+
+                                <strong>
+                                    <i class="bi bi-person-badge"></i>
+                                    Cajero:
+                                </strong>
+
+                                <?= htmlspecialchars($pagos[0]["nombre_cajero"], ENT_QUOTES, "UTF-8") ?>
+
+                            </div>
+                        <?php else: ?>
+
+                            <?php
+                            $nombreCajero = "";
+
+                            foreach ($cajeros as $cajero) {
+                                if (
+                                    (string)$cajero["id"] ===
+                                    (string)$id_cajero_seleccionado
+                                ) {
+                                    $nombreCajero = $cajero["usuario"];
+                                    break;
+                                }
+                            }
+                            ?>
+
+                            <div class="col-md-6">
+                                <strong>
+                                    <i class="bi bi-person-badge"></i>
+                                    Cajero:
+                                </strong>
+
+                                <?= htmlspecialchars($nombreCajero, ENT_QUOTES, "UTF-8") ?>
+                            </div>
+
+                        <?php endif; ?>
+
+                    </div>
+
+                    <?php if (count($pagos) > 0): ?>
+
+                        <!-- =================================
+                            TABLA DE PAGOS
+                            ================================= -->
+                        <div class="table-responsive">
+
+                            <table class="table table-bordered table-hover align-middle">
+
+                                <thead class="table-dark text-center">
+                                    <tr>
+                                        <th>ID pago</th>
+                                        <th>Número de factura</th>
+                                        <th>Fecha y hora</th>
+                                        <th>Forma de pago</th>
+                                        <th>Monto</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+
+                                    <?php foreach ($pagos as $pago): ?>
+
+                                        <tr>
+
+                                            <td class="text-center">
+                                                <?= htmlspecialchars((string)$pago["id"]) ?>
+                                            </td>
+
+                                            <td class="text-center fw-bold">
+                                                <?= htmlspecialchars($pago["numero_serie"]) ?>
+                                            </td>
+
+                                            <td>
+                                                <?= htmlspecialchars($pago["fecha_hora"]) ?>
+                                            </td>
+
+                                            <td class="text-center">
+
+                                                <?php
+                                                // Configurar la presentación de la forma de pago
+                                                $forma = trim((string)$pago["forma_pago"]);
+
+                                                switch ($forma) {
+
+                                                    case "Efectivo":
+                                                        $clase = "bg-success";
+                                                        $icono = "bi-cash";
+                                                        $nombre = "Efectivo";
+                                                        break;
+
+                                                    case "Transferencia":
+                                                        $clase = "bg-primary";
+                                                        $icono = "bi-bank";
+                                                        $nombre = "Transferencia";
+                                                        break;
+
+                                                    case "Debito":
+                                                        $clase = "bg-info text-dark";
+                                                        $icono = "bi-credit-card";
+                                                        $nombre = "Débito";
+                                                        break;
+
+                                                    case "Credito":
+                                                        $clase = "bg-secondary";
+                                                        $icono = "bi-credit-card-2-front";
+                                                        $nombre = "Crédito";
+                                                        break;
+
+                                                    case "Cheque":
+                                                        $clase = "bg-warning text-dark";
+                                                        $icono = "bi-file-earmark-text";
+                                                        $nombre = "Cheque";
+                                                        break;
+
+                                                    default:
+                                                        $clase = "bg-dark";
+                                                        $icono = "bi-exclamation-circle";
+                                                        $nombre = "Sin identificar";
+                                                        break;
+                                                }
+                                                ?>
+
+                                                <span class="badge <?= $clase ?>">
+                                                    <i class="bi <?= $icono ?>"></i>
+                                                    <?= htmlspecialchars($nombre) ?>
+                                                </span>
+
+                                            </td>
+
+                                            <td class="text-end text-nowrap">
+                                                $<?= number_format((float)$pago["monto"], 2, ",", ".") ?>
+                                            </td>
+
+                                        </tr>
+
+                                    <?php endforeach; ?>
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                        <!-- =================================
+                            RESUMEN DE PAGOS
+                            ================================= -->
+                        <h5 class="mt-4 mb-3">
+                            <i class="bi bi-bar-chart-fill"></i>
+                            Resumen de la liquidación
+                        </h5>
+
+                        <div class="row g-3">
+
+                            <!-- Efectivo -->
+                            <div class="col">
+
+                                <div class="card border-success h-100">
                                     <div class="card-body">
 
-                                        <h6 class="text-muted">
-                                            <?= esc([
-                                                'Credito' => 'Crédito',
-                                                'Debito' => 'Débito'
-                                            ][$forma] ?? $forma) ?>
-                                        </h6>
+                                        <div class="text-success mb-2">
+                                            <i class="bi bi-cash fs-3"></i>
+                                        </div>
 
-                                        <h5>
-                                            <?= pesos($monto) ?>
+                                        <h6 class="text-muted">Total efectivo</h6>
+
+                                        <h5 class="mb-0 text-success">
+                                            $<?= number_format($total_efectivo, 2, ",", ".") ?>
                                         </h5>
 
                                     </div>
                                 </div>
+
                             </div>
 
-                        <?php endforeach; ?>
+                            <!-- Transferencia -->
+                            <div class="col">
 
-                    </div>
+                                <div class="card border-primary h-100">
+                                    <div class="card-body">
 
-                    <!-- TOTAL GENERAL -->
-                    <div class="card bg-light mt-4">
+                                        <div class="text-primary mb-2">
+                                            <i class="bi bi-bank fs-3"></i>
+                                        </div>
 
-                        <div class="card-body text-center">
+                                        <h6 class="text-muted">Total transferencia</h6>
 
-                            <p>
-                                Cantidad de pagos:
-                                <?= count($pagos) ?>
-                            </p>
+                                        <h5 class="mb-0 text-primary">
+                                            $<?= number_format($total_transferencia, 2, ",", ".") ?>
+                                        </h5>
 
-                            <h4>
-                                TOTAL A LIQUIDAR:
+                                    </div>
+                                </div>
 
-                                <span class="text-success">
-                                    <?= pesos(
-                                        array_sum(
-                                            array_map(
-                                                fn($p) =>
-                                                    (float)$p['monto'],
-                                                $pagos
-                                            )
-                                        )
-                                    ) ?>
-                                </span>
-                            </h4>
+                            </div>
+
+                            <!-- Débito -->
+                            <div class="col">
+
+                                <div class="card border-info h-100">
+                                    <div class="card-body">
+
+                                        <div class="text-info mb-2">
+                                            <i class="bi bi-credit-card fs-3"></i>
+                                        </div>
+
+                                        <h6 class="text-muted">Total débito</h6>
+
+                                        <h5 class="mb-0 text-info">
+                                            $<?= number_format($total_debito, 2, ",", ".") ?>
+                                        </h5>
+
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <!-- Crédito -->
+                            <div class="col">
+
+                                <div class="card border-secondary h-100">
+                                    <div class="card-body">
+
+                                        <div class="text-secondary mb-2">
+                                            <i class="bi bi-credit-card-2-front fs-3"></i>
+                                        </div>
+
+                                        <h6 class="text-muted">Total crédito</h6>
+
+                                        <h5 class="mb-0 text-secondary">
+                                            $<?= number_format($total_credito, 2, ",", ".") ?>
+                                        </h5>
+
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <!-- Cheque -->
+                            <div class="col">
+
+                                <div class="card border-warning h-100">
+                                    <div class="card-body">
+
+                                        <div class="text-warning mb-2">
+                                            <i class="bi bi-file-earmark-text fs-3"></i>
+                                        </div>
+
+                                        <h6 class="text-muted">Total cheque</h6>
+
+                                        <h5 class="mb-0 text-dark">
+                                            $<?= number_format($total_cheque, 2, ",", ".") ?>
+                                        </h5>
+
+                                    </div>
+                                </div>
+
+                            </div>
 
                         </div>
-                    </div>
 
-                    <!-- ADVERTENCIA -->
-                    <?php if (!empty($pagos_sin_forma)): ?>
+                        <!-- =================================
+                            TOTAL GENERAL
+                            ================================= -->
+                        <div class="card bg-light border-dark mt-4">
 
-                        <div class="alert alert-danger mt-4 text-center">
+                            <div class="card-body text-center">
 
-                            <strong>Atención:</strong>
+                                <p class="text-muted mb-1">
+                                    <i class="bi bi-calculator"></i>
+                                    Cantidad de pagos: <?= count($pagos) ?>
+                                </p>
 
-                            No se puede confirmar esta liquidación
-                            porque hay pagos sin una forma de pago válida.
+                                <h4 class="mb-0">
+                                    TOTAL A LIQUIDAR:
 
-                            <p class="mt-2 mb-0">
+                                    <span class="text-success">
+                                        $<?= number_format($total_general, 2, ",", ".") ?>
+                                    </span>
+                                </h4>
 
-                                Pagos a revisar:
+                            </div>
 
-                                <?= esc(
-                                    implode(', ', $pagos_sin_forma)
-                                ) ?>
+                        </div>
 
-                            </p>
+                        
+
+                        <!-- =================================
+                            CONFIRMAR LIQUIDACIÓN
+                            ================================= -->
+                        <form
+                            method="POST"
+                            action="confirmar_liquidacion_cajero.php"
+                            class="mt-4 text-center"
+                            onsubmit="return confirm('¿Está seguro de confirmar esta liquidación? Los pagos seleccionados quedarán liquidados.');"
+                        >
+
+                            <input
+                                type="hidden"
+                                name="id_cajero"
+                                value="<?= htmlspecialchars($id_cajero_seleccionado) ?>"
+                            >
+
+                            <input
+                                type="hidden"
+                                name="fecha"
+                                value="<?= htmlspecialchars($fecha_seleccionada) ?>"
+                            >
+
+                            <button
+                                type="submit"
+                                class="btn btn-success btn-lg"
+                                <?= !empty($pagos_sin_forma) ? "disabled" : "" ?>
+                            >
+                                <i class="bi bi-check-circle-fill"></i>
+                                Confirmar liquidación
+                            </button>
+
+                        </form>
+
+                    <?php else: ?>
+
+                        <div class="alert alert-secondary text-center mb-0">
+
+                            <i class="bi bi-info-circle-fill"></i>
+
+                            No hay pagos pendientes de liquidación para este
+                            cajero en la fecha seleccionada.
 
                         </div>
 
                     <?php endif; ?>
 
-                    <!-- CONFIRMAR LIQUIDACIÓN -->
-                    <form
-                        method="post"
-                        action="confirmar_liquidacion_cajero.php"
-                        class="mt-4 text-center"
-                        onsubmit="return confirm('¿Confirmar la liquidación de estos pagos?');"
-                    >
-
-                        <input
-                            type="hidden"
-                            name="id_cajero"
-                            value="<?= esc($id_cajero) ?>"
-                        >
-
-                        <input
-                            type="hidden"
-                            name="fecha"
-                            value="<?= esc($fecha) ?>"
-                        >
-
-                        <button
-                            type="submit"
-                            class="btn btn-success btn-lg"
-                            <?= !empty($pagos_sin_forma)
-                                ? 'disabled'
-                                : '' ?>
-                        >
-                            Confirmar liquidación
-                        </button>
-
-                    </form>
-
-                <?php else: ?>
-
-                    <div class="alert alert-secondary">
-
-                        No hay pagos pendientes de liquidación
-                        para este cajero en la fecha seleccionada.
-
-                    </div>
-
-                <?php endif; ?>
+                </div>
 
             </div>
-        </div>
 
-    <?php endif; ?>
+        <?php endif; ?>
 
-</div>
+    </div>
 
-<script src="js/bootstrap-5.3.8/js/bootstrap.bundle.min.js"></script>
+    <!-- JavaScript de Bootstrap -->
+    <script src="js/bootstrap-5.3.8/js/bootstrap.bundle.min.js"></script>
 
 </body>
 </html>

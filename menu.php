@@ -19,7 +19,18 @@
 <hr>
 -->
 <?php
+$usuarioPuedeAdministrar = false;
+$usuarioPuedeGestionarFacturas = false;
+$usuarioEsCajero = false;
+$usuarioEsRepartidor = false;
 if (isset($_SESSION["id_usuario"])) {
+    require_once "permisos.php";
+    $rolUsuario = obtenerRolUsuario($conexion, $_SESSION["id_usuario"]);
+    $usuarioPuedeAdministrar = usuarioPuedeAdministrar($conexion, $_SESSION["id_usuario"]);
+    $usuarioPuedeGestionarFacturas = usuarioPuedeGestionarFacturas($conexion, $_SESSION["id_usuario"]);
+    $usuarioEsCajero = in_array($rolUsuario, ["cajero", "cajera"], true);
+    $usuarioEsRepartidor = $rolUsuario === "repartidor";
+
     $sqlUsuario = "SELECT usuario FROM usuario WHERE id = ?";
     $stmtUsuario = $conexion->prepare($sqlUsuario);
     $stmtUsuario->execute([$_SESSION["id_usuario"]]);
@@ -49,39 +60,45 @@ if (isset($_SESSION["id_usuario"])) {
             <div class="offcanvas-body justify-content-center">
                 <ul class="navbar-nav flex-grow-1 pe-3 gap-4 fs-5">
 
-                    <!-- Menú Usuario -->
-                    <li class="nav-item dropdown nav-underline">
-                        <a class="nav-link dropdown-toggle fw-bold" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-person"></i> Usuario</a>
-                        <ul class="dropdown-menu">
-                            <li>
-                                <a class="dropdown-item" href="listar_usuario.php"><i class="bi bi-people"></i> Listar usuarios</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="crear_usuario.php"><i class="bi bi-person-plus"></i> Nuevo usuario</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="editar_usuario.php"><i class="bi bi-pencil"></i> Editar usuario</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="cambiar_estado_usuario.php"><i class="bi bi-arrow-repeat"></i> Cambiar estado</a>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            
-                            <!-- Menú Rol -->
-                             <li>
-                                <a class="dropdown-item" href="listar_roles.php"><i class="bi bi-list-check"></i> Listar roles</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="crear_rol_usuario.php"><i class="bi bi-person-plus"></i> Nuevo rol</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="editar_rol_usuario.php"><i class="bi bi-pencil"></i> Editar rol</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="eliminar_rol.php"><i class="bi bi-person-x"></i> Eliminar rol</a>
-                            </li>
-                        </ul>
-                    </li>
+                    <?php if (!$usuarioEsCajero && !$usuarioEsRepartidor): ?>
+                        <!-- Menú Usuario -->
+                        <li class="nav-item dropdown nav-underline">
+                            <a class="nav-link dropdown-toggle fw-bold" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-person"></i> Usuario</a>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="listar_usuario.php"><i class="bi bi-people"></i> Listar usuarios</a>
+                                </li>
+                                <?php if ($usuarioPuedeAdministrar): ?>
+                                <li>
+                                    <a class="dropdown-item" href="crear_usuario.php"><i class="bi bi-person-plus"></i> Nuevo usuario</a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="editar_usuario.php"><i class="bi bi-pencil"></i> Editar usuario</a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="cambiar_estado_usuario.php"><i class="bi bi-arrow-repeat"></i> Cambiar estado</a>
+                                </li>
+                                <?php endif; ?>
+                                <li><hr class="dropdown-divider"></li>
+
+                                <!-- Menú Rol -->
+                                <li>
+                                    <a class="dropdown-item" href="listar_roles.php"><i class="bi bi-list-check"></i> Listar roles</a>
+                                </li>
+                                <?php if ($usuarioPuedeAdministrar): ?>
+                                <li>
+                                    <a class="dropdown-item" href="crear_rol_usuario.php"><i class="bi bi-person-plus"></i> Nuevo rol</a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="editar_rol_usuario.php"><i class="bi bi-pencil"></i> Editar rol</a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="eliminar_rol.php"><i class="bi bi-person-x"></i> Eliminar rol</a>
+                                </li>
+                                <?php endif; ?>
+                            </ul>
+                        </li>
+                    <?php endif; ?>
                     
                     <!-- Menú Facturas -->
                     <li class="nav-item dropdown nav-underline">
@@ -90,12 +107,14 @@ if (isset($_SESSION["id_usuario"])) {
                             <li>
                                 <a class="dropdown-item" href="facturas.php"><i class="bi bi-list"></i> Listar factura</a>
                             </li>
-                            <li>
-                                <a class="dropdown-item" href="agregar_factura.php"><i class="bi bi-plus-circle"></i> Ingresar factura</a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="editar_factura.php"><i class="bi bi-pencil"></i> Editar factura</a>
-                            </li>
+                            <?php if ($usuarioPuedeGestionarFacturas): ?>
+                                <li>
+                                    <a class="dropdown-item" href="agregar_factura.php"><i class="bi bi-plus-circle"></i> Ingresar factura</a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="editar_factura.php"><i class="bi bi-pencil"></i> Editar factura</a>
+                                </li>
+                            <?php endif; ?>
                             <li>
                                 <a class="dropdown-item" href="cambiar_estado_factura.php"><i class="bi bi-arrow-repeat"></i> Cambiar estado</a>
                             </li>
@@ -124,24 +143,25 @@ if (isset($_SESSION["id_usuario"])) {
                     <li class="nav-item dropdown nav-underline">
                         <a class="nav-link dropdown-toggle fw-bold" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-calculator"></i> Liquidaciones</a>
                         <ul class="dropdown-menu">
+                            <?php if (!$usuarioEsCajero): ?>
+                                <li>
+                                    <a class="dropdown-item" href="liquidacion_diaria.php"><i class="bi bi-calendar-check"></i> Liquidación diaria repartidor</a>
+                                </li>
+                            <?php endif; ?>
+                            <?php if (!$usuarioEsRepartidor): ?>
                             <li>
-                                <a class="dropdown-item" href="liquidacion_diaria.php"><i class="bi bi-calendar-check"></i> Liquidación diaria Repartidor</a>
+                                <a class="dropdown-item" href="liquidacion_diaria_cajero.php"><i class="bi bi-calendar-check"></i> Liquidación diaria cajero</a>
                             </li>
-                            <li>
-                                <a class="dropdown-item" href="liquidacion_diaria_cajero.php"><i class="bi bi-calendar-check"></i> Liquidación diaria Cajero</a>
-                            </li>
+                            <?php endif; ?>
                         </ul>
                     </li> 
-                                        
+                                                         
                     <!-- Menú Auditoría -->
-                    <li class="nav-item dropdown nav-underline">
-                        <a class="nav-link dropdown-toggle fw-bold" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-shield-check"></i> Auditoría</a>
-                        <ul class="dropdown-menu">
-                            <li>
-                                <a class="dropdown-item" href="listar_auditoria.php"><i class="bi bi-journal-text"></i> Listar auditoría</a>
-                            </li>
-                        </ul>
-                    </li>
+                    <?php if ($usuarioPuedeAdministrar): ?>
+                        <li class="nav-item nav-underline">
+                            <a class="nav-link fw-bold d-inline-flex text-nowrap" href="auditoria.php"><i class="bi bi-journal-text me-2"></i> Auditoría</a>
+                        </li>
+                    <?php endif; ?>
 
                     <!-- Usuario logueado -->
                     <li class="nav-item dropdown ms-auto d-none d-xxl-block">

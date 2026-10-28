@@ -1,4 +1,3 @@
-
 <?php
 session_start();
 
@@ -70,7 +69,10 @@ try {
     ";
 
     $stmt = $conexion->prepare($sqlCajero);
-    $stmt->execute([":id" => $id_cajero]);
+
+    $stmt->execute([
+        ":id" => $id_cajero
+    ]);
 
     $cajero = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -128,7 +130,8 @@ try {
         "Efectivo",
         "Transferencia",
         "Debito",
-        "Credito"
+        "Credito",
+        "Cheque"
     ];
 
     $pagos_invalidos = [];
@@ -144,15 +147,15 @@ try {
             $formas_validas,
             true
         )) {
-
             $pagos_invalidos[] = $pago["id"];
         }
     }
 
+    // =================================================
     // IMPEDIR LIQUIDACIÓN SI HAY ERRORES
+    // =================================================
 
     if (!empty($pagos_invalidos)) {
-
         throw new Exception(
             "No se puede confirmar la liquidación. " .
             "Los siguientes pagos tienen una forma " .
@@ -162,7 +165,7 @@ try {
     }
 
     // =================================================
-    // CALCULAR TOTAL
+    // CALCULAR TOTAL E IDENTIFICAR PAGOS
     // =================================================
 
     $total = 0;
@@ -195,7 +198,6 @@ try {
     $stmt->execute($ids);
 
     if ($stmt->rowCount() !== count($ids)) {
-
         throw new Exception(
             "No se pudieron liquidar todos los pagos."
         );
@@ -208,7 +210,7 @@ try {
     registrarAuditoria(
         $conexion,
         $_SESSION["id_usuario"],
-        "CONFIRMAR LIQUIDACION CAJERO",
+        "LIQUIDACION CAJERO",
         "Pago",
         $ids[0],
         "Liquidación del cajero " . $cajero["usuario"],

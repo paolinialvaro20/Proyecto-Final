@@ -1,9 +1,7 @@
 <?php
-
 // =====================================================
 // FUNCIÓN PARA REGISTRAR ACCIONES EN LA AUDITORÍA
 // =====================================================
-
 function registrarAuditoria(
     $conexion,
     $idUsuario,

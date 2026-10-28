@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 // Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
@@ -15,7 +16,10 @@ $error = "";
 $id_factura_seleccionada = "";
 $detalle_ingresado = "";
 
-// Procesar el formulario
+
+/* =========================================================
+   PROCESAR EL FORMULARIO Y REGISTRAR AUDITORÍA
+   ========================================================= */
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $id_factura = $_POST["id_factura"] ?? "";
     $detalle = trim($_POST["detalle"] ?? "");
@@ -24,16 +28,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $id_factura_seleccionada = $id_factura;
     $detalle_ingresado = $detalle;
 
-    if ($id_factura === "" || !is_numeric($id_factura)) {
+    if (
+        $id_factura === "" ||
+        !ctype_digit((string)$id_factura) ||
+        (int)$id_factura <= 0
+    ) {
         $error = "Debés seleccionar una factura.";
+
     } elseif ($detalle === "") {
         $error = "Debés ingresar una observación.";
 
-    } else {
+    } elseif (mb_strlen($detalle) > 255) {
+        $error = "La observación no puede superar los 255 caracteres.";
 
+    } else {
         try {
             // Verificar que la factura exista
-            $sql = "SELECT id, numero_serie FROM factura WHERE id = :id";
+            $sql = "
+                SELECT id, numero_serie
+                FROM factura
+                WHERE id = :id
+            ";
 
             $stmt = $conexion->prepare($sql);
             $stmt->execute([":id" => $id_factura]);
@@ -43,27 +58,96 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $error = "La factura seleccionada no existe.";
 
             } else {
-                // Obtener fecha y hora actual del sistema
+                // Obtener fecha y hora actual
                 $fecha_hora = date("Y-m-d H:i:s");
 
-                // Insertar la observación
-                $sql = "INSERT INTO observacion(detalle, fecha_hora, id_FACTURA_PENDIENTE, id_USUARIO)
-                        VALUES(:detalle, :fecha_hora, :id_factura, :id_usuario)";
+                try {
+                    $conexion->beginTransaction();
 
-                $stmt = $conexion->prepare($sql);
-                $stmt->execute([ ":detalle" => $detalle, ":fecha_hora" => $fecha_hora, ":id_factura" => $id_factura, ":id_usuario" => $_SESSION["id_usuario"]]);
-                $mensaje = "Observación agregada correctamente.";
+                    // Insertar la observación
+                    $sql = "
+                        INSERT INTO observacion (
+                            detalle,
+                            fecha_hora,
+                            id_FACTURA_PENDIENTE,
+                            id_USUARIO
+                        )
+                        VALUES (
+                            :detalle,
+                            :fecha_hora,
+                            :id_factura,
+                            :id_usuario
+                        )
+                    ";
 
-                // Limpiar los campos después de guardar correctamente
-                $id_factura_seleccionada = "";
-                $detalle_ingresado = "";
+                    $stmt = $conexion->prepare($sql);
+                    $stmt->execute([
+                        ":detalle" => $detalle,
+                        ":fecha_hora" => $fecha_hora,
+                        ":id_factura" => $id_factura,
+                        ":id_usuario" => $_SESSION["id_usuario"]
+                    ]);
+
+                    // Obtener el ID de la observación creada
+                    $idObservacion = $conexion->lastInsertId();
+
+                    // Obtener el nombre del usuario responsable
+                    $sqlUsuario = "
+                        SELECT usuario
+                        FROM usuario
+                        WHERE id = ?
+                    ";
+
+                    $stmtUsuario = $conexion->prepare($sqlUsuario);
+                    $stmtUsuario->execute([
+                        $_SESSION["id_usuario"]
+                    ]);
+
+                    $usuarioResponsable =
+                        $stmtUsuario->fetchColumn() ?: "Desconocido";
+
+                   
+                    // Preparar los valores para la auditoría
+                    $valorNuevo =
+                        "Factura: " . $factura["numero_serie"] .
+                        " | Observación: " . $detalle;
+
+                    // Registrar auditoría
+                    registrarAuditoria(
+                        $conexion,
+                        $_SESSION["id_usuario"],
+                        "AGREGAR",
+                        "Observación",
+                        $idObservacion,
+                        "Se agregó una observación a la factura " .
+                            $factura["numero_serie"],
+                        null,
+                        $valorNuevo
+                    );
+
+                    $conexion->commit();
+
+                    $mensaje = "Observación agregada correctamente.";
+
+                    // Limpiar los campos después de guardar
+                    $id_factura_seleccionada = "";
+                    $detalle_ingresado = "";
+
+                } catch (Exception $e) {
+                    if ($conexion->inTransaction()) {
+                        $conexion->rollBack();
+                    }
+
+                    $error = "Error al guardar la observación.";
+                }
             }
-            
+
         } catch (PDOException $e) {
-            $error = "Error al guardar la observación.";
+            $error = "Error al consultar la factura.";
         }
     }
 }
+
 
 // Obtener las facturas
 try {

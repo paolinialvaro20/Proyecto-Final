@@ -13,8 +13,6 @@ $sql = "SELECT factura.id, factura.numero_serie, factura.monto, factura.fecha_re
 $filtros = [
     "numero_factura" => trim($_GET["numero_factura"] ?? ""),
     "numero_serie" => trim($_GET["numero_serie"] ?? ""),
-    "monto_desde" => trim($_GET["monto_desde"] ?? ""),
-    "monto_hasta" => trim($_GET["monto_hasta"] ?? ""),
     "estado" => trim($_GET["estado"] ?? ""),
     "fecha_registro_desde" => trim($_GET["fecha_registro_desde"] ?? ""),
     "fecha_registro_hasta" => trim($_GET["fecha_registro_hasta"] ?? ""),
@@ -44,26 +42,6 @@ if ($filtros["numero_factura"] !== "") {
 if ($filtros["numero_serie"] !== "") {
     $condiciones[] = "factura.numero_serie LIKE ?";
     $parametros[] = "%" . $filtros["numero_serie"] . "%";
-}
-
-// Filtrar montos sin concatenar valores del usuario en la consulta SQL.
-foreach (["monto_desde" => ">=", "monto_hasta" => "<="] as $campo => $operador) {
-    if ($filtros[$campo] === "") {
-        continue;
-    }
-    $valor = str_replace(",", ".", $filtros[$campo]);
-    if (!is_numeric($valor) || (float)$valor < 0) {
-        $errores[] = "El monto ingresado no es válido.";
-        continue;
-    }
-    $condiciones[] = "factura.monto " . $operador . " ?";
-    $parametros[] = (float)$valor;
-}
-if ($filtros["monto_desde"] !== "" && $filtros["monto_hasta"] !== "" &&
-    is_numeric(str_replace(",", ".", $filtros["monto_desde"])) &&
-    is_numeric(str_replace(",", ".", $filtros["monto_hasta"])) &&
-    (float)str_replace(",", ".", $filtros["monto_desde"]) > (float)str_replace(",", ".", $filtros["monto_hasta"])) {
-    $errores[] = "El monto mínimo no puede superar el máximo.";
 }
 
 if ($filtros["estado"] !== "") {
@@ -170,16 +148,6 @@ if (!$errores) {
                             <label for="numero_serie" class="form-label">Número de serie</label>
                             <input type="search" class="form-control" id="numero_serie" name="numero_serie"
                                 value="<?= htmlspecialchars($filtros["numero_serie"]) ?>" placeholder="Buscar serie">
-                        </div>
-                        <div class="col-12 col-md-6 col-lg-3">
-                            <label for="monto_desde" class="form-label">Monto mínimo</label>
-                            <input type="number" min="0" step="0.01" class="form-control" id="monto_desde" name="monto_desde"
-                                value="<?= htmlspecialchars($filtros["monto_desde"], ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej.: 100">
-                        </div>
-                        <div class="col-12 col-md-6 col-lg-3">
-                            <label for="monto_hasta" class="form-label">Monto máximo</label>
-                            <input type="number" min="0" step="0.01" class="form-control" id="monto_hasta" name="monto_hasta"
-                                value="<?= htmlspecialchars($filtros["monto_hasta"], ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej.: 5000">
                         </div>
                         <div class="col-12 col-md-6 col-lg-3">
                             <label for="estado" class="form-label">Estado</label>

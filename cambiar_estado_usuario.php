@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 // Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
@@ -8,45 +9,108 @@ if (!isset($_SESSION["id_usuario"])) {
     exit;
 }
 
+require_once "permisos.php";
+exigirPermisoAdministrativo($conexion, $_SESSION["id_usuario"]);
+
 $mensaje = "";
 $error = "";
 
-// Procesar cambio de estado
+
+ // Procesar cambio de estado
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $id = $_POST["id"] ?? "";
     $activo = $_POST["activo"] ?? "";
 
-    if ($id === "" || !is_numeric($id)) {
+    if ($id === "" || !ctype_digit((string)$id) || (int)$id <= 0) {
         $error = "Usuario no válido.";
+
     } elseif ($activo !== "0" && $activo !== "1") {
         $error = "Estado no válido.";
-    } else {
 
+    } else {
         try {
-            // Verificar que el usuario exista
-            $sql = "SELECT id, usuario, activo FROM usuario WHERE id = :id";
+            // Obtener los datos actuales del usuario
+            $sql = "SELECT id, usuario, activo
+                    FROM usuario
+                    WHERE id = :id";
+
             $stmt = $conexion->prepare($sql);
             $stmt->execute([":id" => $id]);
+
             $usuarioSeleccionado = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$usuarioSeleccionado) {
                 $error = "El usuario seleccionado no existe.";
+
+            } elseif ((string)$usuarioSeleccionado["activo"] === $activo) {
+                $error = "El usuario ya tiene ese estado.";
+
             } else {
-                // Cambiar estado
-                $sql = "UPDATE usuario SET activo = :activo WHERE id = :id";
-                $stmt = $conexion->prepare($sql);
-                $stmt->execute([":activo" => $activo, ":id" => $id]);
-                if ($activo === "1") {
-                    $mensaje = "Usuario activado correctamente.";
-                } else {
-                    $mensaje = "Usuario desactivado correctamente.";
+                // Determinar los estados anterior y nuevo
+                $estadoAnterior = (int)$usuarioSeleccionado["activo"] === 1
+                    ? "Activo"
+                    : "Inactivo";
+
+                $estadoNuevo = $activo === "1"
+                    ? "Activo"
+                    : "Inactivo";
+
+                $accion = $activo === "1"
+                    ? "ACTIVAR"
+                    : "DESACTIVAR";
+
+                try {
+                    // Iniciar transacción
+                    $conexion->beginTransaction();
+
+                    // Actualizar el estado
+                    $sql = "UPDATE usuario
+                            SET activo = :activo
+                            WHERE id = :id";
+
+                    $stmt = $conexion->prepare($sql);
+                    $stmt->execute([
+                        ":activo" => $activo,
+                        ":id" => $id
+                    ]);
+
+                    // Registrar el movimiento de auditoría
+                    registrarAuditoria(
+                        $conexion,
+                        $_SESSION["id_usuario"],
+                        $accion,
+                        "Usuario",
+                        $usuarioSeleccionado["id"],
+                        "Se " .
+                            ($activo === "1" ? "activó" : "desactivó") .
+                            " el usuario " .
+                            $usuarioSeleccionado["usuario"],
+                        "Estado: " . $estadoAnterior,
+                        "Estado: " . $estadoNuevo
+                    );
+
+                    // Confirmar actualización y auditoría
+                    $conexion->commit();
+
+                    $mensaje = $activo === "1"
+                        ? "Usuario activado correctamente."
+                        : "Usuario desactivado correctamente.";
+
+                } catch (Exception $e) {
+                    if ($conexion->inTransaction()) {
+                        $conexion->rollBack();
+                    }
+
+                    $error = "Error al cambiar el estado del usuario.";
                 }
             }
+
         } catch (PDOException $e) {
-            $error = "Error al cambiar el estado del usuario.";
+            $error = "Error al consultar el usuario.";
         }
     }
 }
+
 
 // Obtener todos los usuarios
 try {

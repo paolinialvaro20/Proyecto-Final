@@ -1,377 +1,195 @@
 <?php
-
-// Conexión a la base de datos
+session_start();
 require_once "conexion.php";
 
+// Verificar que haya un usuario logueado
+if (!isset($_SESSION["id_usuario"])) {
+    header("Location: login.php");
+    exit;
+}
 
-// ==========================================
-// OBTENER LOS REGISTROS DE AUDITORÍA
-// ==========================================
+require_once "permisos.php";
+exigirPermisoAdministrativo($conexion, $_SESSION["id_usuario"]);
 
-$sql = "SELECT 
-            auditoria.id,
-            usuario.usuario,
-            auditoria.accion,
-            auditoria.entidad,
-            auditoria.id_entidad,
-            auditoria.descripcion,
-            auditoria.valor_anterior,
-            auditoria.valor_nuevo,
-            auditoria.fecha_hora
-        FROM auditoria
-        INNER JOIN usuario
-            ON auditoria.id_usuario = usuario.id
-        ORDER BY auditoria.fecha_hora DESC";
+// Obtener los registros de auditoría
+$sql = "SELECT a.id, u.usuario, a.accion, a.entidad, a.id_entidad, a.descripcion, a.valor_anterior, a.valor_nuevo, a.fecha_hora
+        FROM auditoria a LEFT JOIN usuario u ON a.id_usuario = u.id
+        ORDER BY a.fecha_hora DESC, a.id DESC";
 
 $stmt = $conexion->prepare($sql);
 $stmt->execute();
-
-$registros = $stmt->fetchAll();
-
+$registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
-
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Auditoría del Sistema</title>
-
-    <style>
-
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 30px;
-        }
-
-        .contenedor {
-            width: 95%;
-            max-width: 1400px;
-            margin: auto;
-            background-color: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0px 2px 10px rgba(0,0,0,0.1);
-        }
-
-        h1 {
-            text-align: center;
-            margin-bottom: 10px;
-        }
-
-        .descripcion {
-            text-align: center;
-            color: #666;
-            margin-bottom: 25px;
-        }
-
-        .volver {
-            display: inline-block;
-            padding: 10px 18px;
-            background-color: #333;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-
-        .volver:hover {
-            background-color: #555;
-        }
-
-        .tabla-contenedor {
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th {
-            background-color: #333;
-            color: white;
-            padding: 12px;
-            text-align: center;
-        }
-
-        td {
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-            text-align: center;
-        }
-
-        tr:hover {
-            background-color: #f2f2f2;
-        }
-
-        .accion {
-            font-weight: bold;
-        }
-
-        .fecha {
-            white-space: nowrap;
-        }
-
-        .sin-registros {
-            text-align: center;
-            padding: 30px;
-            color: #666;
-            font-size: 18px;
-        }
-
-    </style>
-
+    <title>Auditoría del sistema</title>
+    <!-- Bootstrap 5.3.8 -->
+    <link rel="stylesheet" href="css/bootstrap-5.3.8/css/bootstrap.min.css">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="imagenes/bootstrap-icons-1.13.1/bootstrap-icons.min.css">
+    <!-- Estilos propios -->
+    <link rel="stylesheet" href="css/estilo.css">
 </head>
-
-
 <body>
+    <?php require_once "menu.php"; ?>
 
-<div class="contenedor">
+    <div class="container mt-5">
 
-    <!-- Cambiá index.php si tu menú principal tiene otro nombre -->
-    <a href="index.php" class="volver">
-        ← Volver
-    </a>
-
-
-    <h1>Auditoría del Sistema</h1>
-
-    <p class="descripcion">
-        Registro de las acciones realizadas por los usuarios del sistema.
-    </p>
-
-
-    <?php if (count($registros) > 0): ?>
-
-
-        <div class="tabla-contenedor">
-
-            <table>
-
-                <thead>
-
-                    <tr>
-
-                        <th>ID</th>
-
-                        <th>Usuario</th>
-
-                        <th>Acción</th>
-
-                        <th>Entidad</th>
-
-                        <th>ID Registro</th>
-
-                        <th>Descripción</th>
-
-                        <th>Valor anterior</th>
-
-                        <th>Valor nuevo</th>
-
-                        <th>Fecha y hora</th>
-
-                    </tr>
-
-                </thead>
-
-
-                <tbody>
-
-
-                <?php foreach ($registros as $registro): ?>
-
-
-                    <tr>
-
-
-                        <!-- ID DE AUDITORÍA -->
-
-                        <td>
-
-                            <?php
-                            echo $registro["id"];
-                            ?>
-
-                        </td>
-
-
-                        <!-- USUARIO -->
-
-                        <td>
-
-                            <?php
-                            echo htmlspecialchars($registro["usuario"]);
-                             ?>
-
-                        </td>
-
-
-                        <!-- ACCIÓN -->
-
-                        <td class="accion">
-
-                            <?php
-                            echo htmlspecialchars($registro["accion"]);
-                            ?>
-
-                        </td>
-
-
-                        <!-- ENTIDAD -->
-
-                        <td>
-
-                            <?php
-                            echo htmlspecialchars($registro["entidad"]);
-                            ?>
-
-                        </td>
-
-
-                        <!-- ID DEL REGISTRO MODIFICADO -->
-
-                        <td>
-
-                            <?php
-
-                            if ($registro["id_entidad"] != null) {
-
-                                echo $registro["id_entidad"];
-
-                            } else {
-
-                                echo "-";
-
-                            }
-
-                            ?>
-
-                        </td>
-
-
-                        <!-- DESCRIPCIÓN -->
-
-                        <td>
-
-                            <?php
-
-                            if (!empty($registro["descripcion"])) {
-
-                                echo htmlspecialchars(
-                                    $registro["descripcion"]
-                                );
-
-                            } else {
-
-                                echo "-";
-
-                            }
-
-                            ?>
-
-                        </td>
-
-
-                        <!-- VALOR ANTERIOR -->
-
-                        <td>
-
-                            <?php
-
-                            if (!empty($registro["valor_anterior"])) {
-
-                                echo htmlspecialchars(
-                                    $registro["valor_anterior"]
-                                );
-
-                            } else {
-
-                                echo "-";
-
-                            }
-
-                            ?>
-
-                        </td>
-
-
-                        <!-- VALOR NUEVO -->
-
-                        <td>
-
-                            <?php
-
-                            if (!empty($registro["valor_nuevo"])) {
-
-                                echo htmlspecialchars(
-                                    $registro["valor_nuevo"]
-                                );
-
-                            } else {
-
-                                echo "-";
-
-                            }
-
-                            ?>
-
-                        </td>
-
-
-                        <!-- FECHA Y HORA -->
-
-                        <td class="fecha">
-
-                            <?php
-
-                            $fecha = new DateTime(
-                                $registro["fecha_hora"]
-                            );
-
-                            echo $fecha->format(
-                                "d/m/Y H:i:s"
-                            );
-
-                            ?>
-
-                        </td>
-
-
-                    </tr>
-
-
-                <?php endforeach; ?>
-
-
-                </tbody>
-
-            </table>
-
+        <!-- Botón para volver -->
+        <div class="mt-4 mb-2">
+            <a href="index.php" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Volver al inicio</a>
         </div>
 
+        <!-- Tarjeta principal -->
+        <div class="card shadow mb-5">
 
-    <?php else: ?>
+            <!-- Encabezado -->
+            <div class="card-header bg-dark text-white text-center">
+                <h4 class="mb-0"><i class="bi bi-journal-text"></i> Registro de auditoría</h4>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
 
+                    <!-- Descripción -->
+                    <p class="text-muted mb-0">Registro de las acciones realizadas por los usuarios del sistema.</p>
 
-        <div class="sin-registros">
+                    <!-- Contador -->
+                    <span class="badge bg-dark">
+                        Total de registros: <?= count($registros) ?>
+                    </span>
+                </div>
+                <?php if (count($registros) > 0): ?>
 
-            Todavía no existen registros de auditoría.
+                    <!-- Tabla responsive -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle">
+                            <thead class="table-dark text-center">
+                                <tr>
+                                    <th>Usuario</th>
+                                    <th>Acción</th>
+                                    <th>Entidad</th>
+                                    <th>Descripción</th>
+                                    <th>Valor anterior</th>
+                                    <th>Valor nuevo</th>
+                                    <th>Fecha y hora</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($registros as $registro): ?>
+                                    <?php
+                                    // Color para identificar el tipo de acción
+                                    $accion = mb_strtoupper(trim($registro["accion"]), "UTF-8");
 
+                                    switch ($accion) {
+                                        case "CREAR":
+                                        case "AGREGAR":
+                                        case "REGISTRAR":
+                                        case "ACTIVAR":
+                                            $claseAccion = "bg-success";
+                                            break;
+
+                                        case "EDITAR":
+                                        case "CAMBIAR ESTADO":
+                                        case "CAMBIAR CONTRASEÑA":
+                                            $claseAccion = "bg-primary";
+                                            break;
+
+                                        case "ELIMINAR":
+                                        case "DESACTIVAR":
+                                        case "INICIO DE SESIÓN FALLIDO":
+                                            $claseAccion = "bg-danger";
+                                            break;
+                                            
+                                        case "LIQUIDACION REPARTIDOR":
+                                         case "LIQUIDACION CAJERO":
+                                            $claseAccion = "bg-info text-dark";
+                                            break;
+                                        
+                                        case "INICIO DE SESIÓN":
+                                        case "CERRAR SESIÓN":
+                                            $claseAccion = "bg-secondary";
+                                            break;
+
+                                        default:
+                                            $claseAccion = "bg-dark";
+                                            break;
+                                    }
+                                    $fecha = new DateTime($registro["fecha_hora"]);
+                                    ?>
+
+                                    <tr>
+                                        <!-- Usuario -->
+                                        <td class="text-center text-nowrap">
+                                            <i class="bi bi-person-fill"></i>
+                                            <?= htmlspecialchars($registro["usuario"] ?? "Usuario no disponible") ?>
+                                        </td>
+
+                                        <!-- Acción -->
+                                        <td class="text-center text-nowrap">
+                                            <span class="badge <?= $claseAccion ?>">
+                                                <?= htmlspecialchars($registro["accion"]) ?>
+                                            </span>
+                                        </td>
+
+                                        <!-- Entidad -->
+                                        <td class="text-center fw-bold text-uppercase">
+                                            <?= htmlspecialchars($registro["entidad"] ?? "-") ?>
+                                        </td>
+
+                                        <!-- Descripción -->
+                                        <td>
+                                            <?= !empty($registro["descripcion"])
+                                                ? htmlspecialchars($registro["descripcion"])
+                                                : "-" ?>
+                                        </td>
+
+                                        <!-- Valor anterior -->
+                                        <td>
+                                            <?= !empty($registro["valor_anterior"])
+                                                ? htmlspecialchars($registro["valor_anterior"])
+                                                : "-" ?>
+                                        </td>
+
+                                        <!-- Valor nuevo -->
+                                        <td>
+                                            <?= !empty($registro["valor_nuevo"])
+                                                ? htmlspecialchars($registro["valor_nuevo"])
+                                                : "-" ?>
+                                        </td>
+
+                                        <!-- Fecha y hora -->
+                                        <td class="text-center text-nowrap">
+                                            <i class="bi bi-calendar-event"></i>
+                                            <?= htmlspecialchars($fecha->format("d/m/Y H:i:s")) ?>
+                                        </td>
+                                    </tr>
+
+                                <?php endforeach; ?>
+                            </tbody>
+
+                        </table>
+                    </div>
+
+                <?php else: ?>
+
+                    <!-- Mensaje cuando no hay registros -->
+                    <div class="alert alert-info text-center mb-0">
+                        <i class="bi bi-info-circle-fill"></i>
+                        Todavía no existen registros de auditoría.
+                    </div>
+
+                <?php endif; ?>
+
+            </div>
         </div>
+    </div>
 
-
-    <?php endif; ?>
-
-
-</div>
-
+    <!-- JavaScript de Bootstrap 5.3.8 -->
+    <script src="js/bootstrap-5.3.8/js/bootstrap.bundle.min.js"></script>
 
 </body>
-
 </html>

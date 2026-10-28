@@ -85,6 +85,11 @@ $pagos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             $icono = "bi-credit-card-2-front";
                                             $nombre = "Crédito";
                                             break;
+                                        case "Cheque":
+                                            $clase = "bg-warning text-dark";
+                                            $icono = "bi-file-earmark-text";
+                                            $nombre = "Cheque";
+                                            break;
                                         default:
                                             $clase = "bg-dark";
                                             $icono = "bi-wallet2";

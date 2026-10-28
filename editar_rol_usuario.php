@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 // Verificar que haya un usuario logueado
 if (!isset($_SESSION["id_usuario"])) {
@@ -8,41 +9,98 @@ if (!isset($_SESSION["id_usuario"])) {
     exit;
 }
 
+require_once "permisos.php";
+exigirPermisoAdministrativo($conexion, $_SESSION["id_usuario"]);
+
 $mensaje = "";
 $error = "";
 
-// Procesar modificación
+
+ // Procesar modificación
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $id = $_POST["id"] ?? "";
     $nombre = trim($_POST["nombre"] ?? "");
-    if ($id === "" || !is_numeric($id)) {
+
+    if ($id === "" || !ctype_digit((string)$id) || (int)$id <= 0) {
         $error = "Rol no válido.";
+
     } elseif ($nombre === "") {
         $error = "Debés ingresar el nombre del rol.";
+
     } else {
-
         try {
-            // Verificar si ya existe otro rol con ese nombre
-            $sql = "SELECT id FROM rol WHERE nombre = :nombre AND id != :id";
-            $stmt = $conexion->prepare($sql);
-            $stmt->execute([":nombre" => $nombre, ":id" => $id]);
-            $rolExistente = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Obtener el rol actual
+            $sqlAnterior = "SELECT id, nombre FROM rol WHERE id = :id";
+            $stmtAnterior = $conexion->prepare($sqlAnterior);
+            $stmtAnterior->execute([":id" => $id]);
+            $rolAnterior = $stmtAnterior->fetch(PDO::FETCH_ASSOC);
 
-            if ($rolExistente) {
-                $error = "Rol ya existente en la base de datos, verifique";
+            if (!$rolAnterior) {
+                $error = "El rol seleccionado no existe.";
+
             } else {
-                // Actualizar el rol
-                $sql = "UPDATE rol SET nombre = :nombre WHERE id = :id";
+                // Verificar si existe otro rol con el mismo nombre
+                $sql = "SELECT id FROM rol
+                        WHERE nombre = :nombre AND id != :id";
+
                 $stmt = $conexion->prepare($sql);
-                $stmt->execute([":nombre" => $nombre, ":id" => $id]);
-                $mensaje = "Rol actualizado correctamente.";
+                $stmt->execute([
+                    ":nombre" => $nombre,
+                    ":id" => $id
+                ]);
+
+                if ($stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $error = "Rol ya existente en la base de datos, verifique.";
+
+                } elseif ($rolAnterior["nombre"] === $nombre) {
+                    $error = "El nombre del rol no presenta cambios.";
+
+                } else {
+                    try {
+                        // Iniciar transacción
+                        $conexion->beginTransaction();
+
+                        // Actualizar el rol
+                        $sql = "UPDATE rol SET nombre = :nombre WHERE id = :id";
+                        $stmt = $conexion->prepare($sql);
+                        $stmt->execute([
+                            ":nombre" => $nombre,
+                            ":id" => $id
+                        ]);
+
+                        // Registrar el movimiento en auditoría
+                        registrarAuditoria(
+                            $conexion,
+                            $_SESSION["id_usuario"],
+                            "EDITAR",
+                            "Rol",
+                            $id,
+                            "Se modificó el rol " . $rolAnterior["nombre"] . " por rol " . $nombre,
+                            "Nombre: " . $rolAnterior["nombre"],
+                            "Nombre: " . $nombre
+                        );
+
+                        // Confirmar actualización y auditoría
+                        $conexion->commit();
+
+                        $mensaje = "Rol actualizado correctamente.";
+
+                    } catch (Exception $e) {
+                        if ($conexion->inTransaction()) {
+                            $conexion->rollBack();
+                        }
+
+                        $error = "Error al modificar el rol.";
+                    }
+                }
             }
 
         } catch (PDOException $e) {
-            $error = "Error al modificar el rol.";
+            $error = "Error al consultar el rol.";
         }
     }
 }
+
 
 // Obtener todos los roles
 try {

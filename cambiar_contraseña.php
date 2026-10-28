@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "registrar_auditoria.php";
 
 // ==========================================
 // VERIFICAR SESIÓN
@@ -61,12 +62,53 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             // ==========================================
             // ACTUALIZAR CONTRASEÑA
             // ==========================================
-            $contraseniaHash = password_hash($contraseniaNueva, PASSWORD_DEFAULT);
-            $sqlActualizar = "UPDATE usuario SET contrasenia = ? WHERE id = ?";
-            $stmtActualizar = $conexion->prepare($sqlActualizar);
-            $stmtActualizar->execute([$contraseniaHash, $_SESSION["id_usuario"]]);
-            $mensaje = "La contraseña se cambió correctamente.";
-            $tipoMensaje = "success";
+            try {
+                // Iniciar la transacción
+                $conexion->beginTransaction();
+
+                // Generar el hash de la nueva contraseña
+                $contraseniaHash = password_hash(
+                    $contraseniaNueva,
+                    PASSWORD_DEFAULT
+                );
+
+                // Actualizar la contraseña
+                $sqlActualizar = "UPDATE usuario SET contrasenia = ? WHERE id = ?";
+                $stmtActualizar = $conexion->prepare($sqlActualizar);
+                $stmtActualizar->execute([
+                    $contraseniaHash,
+                    $_SESSION["id_usuario"]
+                ]);
+
+                // Registrar la acción en la auditoría
+                registrarAuditoria(
+                    $conexion,
+                    (int) $_SESSION["id_usuario"],
+                    "CAMBIAR CONTRASEÑA",
+                    "Usuario",
+                    (int) $_SESSION["id_usuario"],
+                    "El usuario " . ($_SESSION["usuario"] ?? "Usuario desconocido") .
+                        " cambió su contraseña correctamente",
+                    "-",
+                    "Contraseña actualizada"
+                );
+
+                // Confirmar ambas operaciones
+                $conexion->commit();
+                $mensaje = "La contraseña se cambió correctamente.";
+                $tipoMensaje = "success";
+
+            } catch (Throwable $e) {
+                // Revertir los cambios si algo falla
+                if ($conexion->inTransaction()) {
+                    $conexion->rollBack();
+                }
+
+                error_log("Error al cambiar la contraseña: " . $e->getMessage());
+                $mensaje = "No se pudo cambiar la contraseña. Intentá nuevamente.";
+                $tipoMensaje = "danger";
+            }
+                    
         }
     }
 }
