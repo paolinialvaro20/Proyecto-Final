@@ -35,7 +35,7 @@ Para ejecutar el proyecto localmente se necesita:
 1. Clonar el repositorio:
 
    ```bash
-   git clone URL_DEL_REPOSITORIO
+   git clone https://github.com/paolinialvaro20/Proyecto-Final.git
    ```
 
 2. Copiar la carpeta del proyecto dentro del directorio `htdocs` de XAMPP.
