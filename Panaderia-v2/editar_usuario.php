@@ -9,6 +9,9 @@ if (!isset($_SESSION["id_usuario"])) {
     exit;
 }
 
+require_once "permisos.php";
+exigirPermisoAdministrativo($conexion, $_SESSION["id_usuario"]);
+
 require_once "menu.php";
 $mensaje = "";
 
@@ -323,7 +326,6 @@ if ($id_usuario_editar != "") {
 
                                 <!-- Usuario -->
                                 <div class="mb-3">
-
                                     <label for="usuario" class="form-label"><i class="bi bi-person-fill"></i> Usuario</label>
                                     <input type="text" id="usuario" name="usuario" class="form-control"
                                         value="<?= htmlspecialchars($usuarioEditar["usuario"]) ?>" maxlength="32" required>

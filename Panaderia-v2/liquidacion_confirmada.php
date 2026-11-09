@@ -1,158 +1,144 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "permisos.php";
 
-// =====================================================
-// VERIFICAR SESIÓN
-// =====================================================
 if (!isset($_SESSION["id_usuario"])) {
     header("Location: login.php");
     exit;
 }
+exigirPermisoNoCajero($conexion, $_SESSION["id_usuario"]);
 
-// =====================================================
-// DATOS RECIBIDOS
-// =====================================================
-$id_repartidor = $_GET["id_repartidor"] ?? "";
-$fecha = $_GET["fecha"] ?? "";
+function esc($valor) {
+    return htmlspecialchars((string)$valor, ENT_QUOTES, "UTF-8");
+}
 
-// =====================================================
-// BUSCAR REPARTIDOR
-// =====================================================
-$repartidor = null;
+function pesos($valor) {
+    return "$" . number_format((float)$valor, 2, ",", ".");
+}
+
+$id_liquidacion = $_GET["id_liquidacion"] ?? "";
+$error = "";
+$liquidacion = null;
 $pagos = [];
-$totalGeneral = 0;
-$totalEfectivo = 0;
-$totalTransferencia = 0;
-$totalCredito = 0;
-$totalDebito = 0;
-$totalCheque = 0;
+$fechaPagos = "No disponible";
 
 try {
-    $sql = "SELECT usuario FROM usuario WHERE id = :id";
-    $stmt = $conexion->prepare($sql);
-    $stmt->execute([":id" => $id_repartidor]);
-    $repartidor = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    // =============================================
-    // BUSCAR PAGOS LIQUIDADOS
-    // =============================================
-    $sqlPagos = "SELECT p.id, p.monto, p.forma_pago, p.fecha_hora, f.numero_serie
-        FROM pago p INNER JOIN factura f ON p.id_factura = f.id
-        WHERE p.id_repartidor = :id_repartidor AND DATE(p.fecha_hora) = :fecha AND p.liquidado = 1
-        ORDER BY p.fecha_hora ASC
-    ";
-
-    $stmtPagos = $conexion->prepare($sqlPagos);
-    $stmtPagos->execute([":id_repartidor" => $id_repartidor, ":fecha" => $fecha]);
-    $pagos = $stmtPagos->fetchAll(PDO::FETCH_ASSOC);
-
-    // =============================================
-    // CALCULAR TOTALES
-    // =============================================
-    foreach ($pagos as $pago) {
-        $monto = (float) $pago["monto"];
-        $totalGeneral += $monto;
-
-        switch ($pago["forma_pago"]) {
-            case "Efectivo":
-                $totalEfectivo += $monto;
-                break;
-            case "Transferencia":
-                $totalTransferencia += $monto;
-                break;
-            case "Credito":
-                $totalCredito += $monto;
-                break;
-            case "Debito":
-                $totalDebito += $monto;
-                break;
-            case "Cheque":
-                $totalCheque += $monto;
-                break;
-        }
+    if (!ctype_digit((string)$id_liquidacion) || (int)$id_liquidacion < 1) {
+        throw new Exception("El identificador de la liquidación no es válido.");
     }
-} catch (PDOException $e) {
-    $error = "No se pudo obtener la información de la liquidación.";
+
+    // Obtener la liquidación, el repartidor, el rol y quien la registró.
+    $sql = "
+        SELECT
+            l.*,
+            u.usuario AS nombre_liquidado,
+            r.nombre AS nombre_rol,
+            ur.usuario AS nombre_registro
+        FROM liquidacion l
+        INNER JOIN usuario u ON u.id = l.id_usuario_liquidado
+        INNER JOIN rol r ON r.id = u.id_ROL
+        INNER JOIN usuario ur ON ur.id = l.id_usuario_registro
+        WHERE l.id = :id
+          AND r.nombre = 'Repartidor'
+    ";
+    $stmt = $conexion->prepare($sql);
+    $stmt->execute([":id" => $id_liquidacion]);
+    $liquidacion = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$liquidacion) {
+        throw new Exception("No se encontró la liquidación del repartidor.");
+    }
+
+    // Recuperar exclusivamente los pagos asociados a esta liquidación.
+    $sqlPagos = "
+        SELECT
+            p.id,
+            p.monto,
+            p.forma_pago,
+            p.fecha_hora,
+            f.numero_serie
+        FROM pago p
+        INNER JOIN factura f ON f.id = p.id_factura
+        WHERE p.id_liquidacion = :id_liquidacion
+        ORDER BY p.fecha_hora ASC, p.id ASC
+    ";
+    $stmt = $conexion->prepare($sqlPagos);
+    $stmt->execute([":id_liquidacion" => $id_liquidacion]);
+    $pagos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if ($pagos) {
+        $fechaPagos = date("Y-m-d", strtotime($pagos[0]["fecha_hora"]));
+    }
+
+    if (count($pagos) !== (int)$liquidacion["cantidad_pagos"]) {
+        throw new Exception("La cantidad de pagos asociados no coincide con el resumen de la liquidación.");
+    }
+
+} catch (Exception $e) {
+    $error = $e->getMessage();
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Liquidación confirmada</title>
-    <!-- Bootstrap -->
     <link rel="stylesheet" href="css/bootstrap-5.3.8/css/bootstrap.min.css">
-    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="imagenes/bootstrap-icons-1.13.1/bootstrap-icons.min.css">
-    <!-- Estilos propios -->
     <link rel="stylesheet" href="css/estilo.css">
+    <style>
+        @media print {
+            body { background: white !important; }
+            .no-imprimir { display: none !important; }
+            .container {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .card { box-shadow: none !important; }
+            .comprobante { margin: 0 !important; }
+        }
+    </style>
 </head>
 <body>
     <div class="container mt-4 mb-5">
         <div class="comprobante">
-
-            <!-- =========================================
-                ENCABEZADO
-                ========================================= -->
             <div class="card shadow">
                 <div class="card-body p-4">
-                    <div class="encabezado-comprobante">
+                    <div class="encabezado-comprobante text-center">
                         <img src="imagenes/logo.png" alt="Logo de la empresa" class="logo-comprobante">
                         <hr>
-                        <h4 class="fw-bold">COMPROBANTE DE LIQUIDACIÓN DIARIA</h4>
+                        <h4 class="fw-bold">COMPROBANTE DE LIQUIDACIÓN</h4>
                     </div>
 
-                    <!-- =================================
-                        DATOS DE LA LIQUIDACIÓN
-                        ================================= -->             
-                    <div class="datos-comprobante mb-4">
-                        <div class="row g-3 align-items-center">
-                            <!-- Repartidor -->
-                            <div class="col-6">
-                                <p class="mb-1 text-muted">
-                                    <i class="bi bi-person-fill"></i>
-                                    Repartidor
-                                </p>
-                                <h6 class="mb-0">
-                                    <?= htmlspecialchars(
-                                        $repartidor["usuario"] ?? "No disponible"
-                                    ) ?>
-                                </h6>
-                            </div>
-
-                            <!-- Fecha de liquidación -->
-                            <div class="col-6">
-                                <p class="mb-1 text-muted">
-                                    <i class="bi bi-calendar-event"></i>
-                                    Fecha de liquidación
-                                </p>
-                                <h6 class="mb-0">
-                                    <?= htmlspecialchars($fecha) ?>
-                                </h6>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- =================================
-                        MENSAJE DE ERROR
-                        ================================= -->
-                    <?php if (isset($error)): ?>
+                    <?php if ($error !== ""): ?>
                         <div class="alert alert-danger">
-                            <i class="bi bi-exclamation-triangle-fill"></i> <?= htmlspecialchars($error) ?>
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <?= esc($error) ?>
                         </div>
                     <?php else: ?>
+                        <div class="datos-comprobante mb-4">
+                            <div class="row g-3">
+                                
+                                <!-- Repartidor -->
+                                <div class="col-md-6">
+                                    <p class="mb-1 text-muted"><i class="bi bi-person-fill"></i> Repartidor</p>
+                                    <h6><?= esc($liquidacion["nombre_liquidado"] ?? "No disponible") ?></h6>
+                                </div>
 
-                        <!-- =================================
-                            TABLA DE PAGOS
-                            ================================= -->
-                        <h5 class="mb-3">
-                            <i class="bi bi-receipt"></i>
-                            Detalle de pagos liquidados
-                        </h5>
+                                <!-- Fecha -->
+                                <div class="col-md-6">
+                                    <p class="mb-1 text-muted"><i class="bi bi-calendar-event"></i> Fecha de liquidación</p>
+                                    <h6><?= esc($fechaPagos) ?></h6>
+                                </div>
+                            </div>
+                        </div>
 
+                        <!-- TABLA DE PAGOS -->
+                        <h5 class="mb-3"><i class="bi bi-receipt"></i> Detalle de pagos liquidados</h5>
                         <?php if (count($pagos) > 0): ?>
                             <div class="table-responsive">
                                 <table class="table table-bordered align-middle">
@@ -169,15 +155,15 @@ try {
                                         <?php foreach ($pagos as $pago): ?>
                                             <tr>
                                                 <td class="text-center">
-                                                    <?= htmlspecialchars($pago["id"]) ?>
-                                                </td>
-                                                <td>
-                                                    <?= htmlspecialchars($pago["numero_serie"]) ?>
+                                                    <?= esc($pago["id"]) ?>
                                                 </td>
                                                 <td class="text-center">
-                                                    <?= htmlspecialchars(date("H:i",strtotime($pago["fecha_hora"]))) ?>
+                                                    <?= esc($pago["numero_serie"]) ?>
                                                 </td>
-                                                <td class="text-center">  
+                                                <td class="text-center">
+                                                    <?= esc(date("H:i", strtotime($pago["fecha_hora"]))) ?>
+                                                </td>
+                                                <td class="text-center">
                                                     <?php
                                                         $formaPago = $pago["forma_pago"];
                                                         $nombreFormaPago = match ($formaPago) {
@@ -187,105 +173,66 @@ try {
                                                         };
                                                     ?>
                                                     <span>
-                                                        <?= htmlspecialchars($nombreFormaPago) ?>
+                                                        <?= esc($nombreFormaPago) ?>
                                                     </span>
                                                 </td>
                                                 <td class="text-end text-nowrap">
-                                                    $<?= number_format((float) $pago["monto"], 2, ",", ".") ?>
+                                                    <?= pesos($pago["monto"]) ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
-
                                     </tbody>
                                 </table>
                             </div>
 
                         <?php else: ?>
                             <div class="alert alert-secondary text-center">
-                                <i class="bi bi-info-circle-fill"></i>
-                                No se encontraron pagos liquidados para esta fecha.
+                                No hay pagos asociados a esta liquidación.
                             </div>
                         <?php endif; ?>
 
-                        <!-- =================================
-                            RESUMEN Y TOTAL GENERAL
-                            ================================= -->
                         <div class="card bg-light border-dark mt-4">
                             <div class="card-body">
-                                <p class="text-center mb-3">Cantidad de pagos: <?= count($pagos) ?></p>
+                                <p class="text-center mb-3">
+                                    Cantidad de pagos: <?= esc($liquidacion["cantidad_pagos"]) ?>
+                                </p>
                                 <hr>
-
-                                <!-- Resumen por forma de pago -->
                                 <h5 class="mb-3"><i class="bi bi-bar-chart-fill"></i> Resumen por forma de pago</h5>
                                 <div class="totales">
-                                    <p>
-                                        <strong>Efectivo:</strong>
-                                        $<?= number_format($totalEfectivo, 2, ",", ".") ?>
-                                    </p>
-                                    <p>
-                                        <strong>Transferencia:</strong>
-                                        $<?= number_format($totalTransferencia, 2, ",", ".") ?>
-                                    </p>
-                                    <p>
-                                        <strong>Débito:</strong>
-                                        $<?= number_format($totalDebito, 2, ",", ".") ?>
-                                    </p>
-                                    <p>
-                                        <strong>Crédito:</strong>
-                                        $<?= number_format($totalCredito, 2, ",", ".") ?>
-                                    </p>
-                                    <p>
-                                        <strong>Cheque:</strong>
-                                        $<?= number_format($totalCheque, 2, ",", ".") ?>
-                                    </p>
+                                    <p><strong>Efectivo:</strong> <?= pesos($liquidacion["total_efectivo"]) ?></p>
+                                    <p><strong>Transferencia:</strong> <?= pesos($liquidacion["total_transferencia"]) ?></p>
+                                    <p><strong>Débito:</strong> <?= pesos($liquidacion["total_debito"]) ?></p>
+                                    <p><strong>Crédito:</strong> <?= pesos($liquidacion["total_credito"]) ?></p>
+                                    <p><strong>Cheque:</strong> <?= pesos($liquidacion["total_cheque"]) ?></p>
                                 </div>
                                 <hr>
-
-                                <!-- Total general -->
                                 <div class="total-general text-center fw-bold">
                                     <strong>TOTAL LIQUIDADO:</strong>
-                                    <div class="text-success">
-                                        $<?= number_format($totalGeneral, 2, ",", ".") ?>
-                                    </div>
+                                    <div class="text-success"><?= pesos($liquidacion["total_general"]) ?></div>
                                 </div>
-
                             </div>
                         </div>
 
-                        <!-- =================================
-                            FIRMAS
-                            ================================= -->
                         <div class="firmas">
-                            <div class="firma">
-                                Firma del repartidor
-                            </div>
-                            <div class="firma">
-                                Firma del responsable
-                            </div>
+                            <div class="firma">Firma del repartidor</div>
+                            <div class="firma">Firma del responsable</div>
                         </div>
                     <?php endif; ?>
 
-                    <!-- =====================================
-                        BOTONES
-                        ===================================== -->
                     <div class="text-center mt-4 no-imprimir">
                         <button type="button" class="btn btn-dark me-2" onclick="window.print()">
-                            <i class="bi bi-file-earmark-pdf"></i>
-                            Guardar como PDF
+                            <i class="bi bi-file-earmark-pdf"></i> Guardar como PDF
                         </button>
                         <a href="liquidacion_diaria.php" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left-circle"></i>
-                            Volver a liquidación diaria
+                            <i class="bi bi-arrow-left-circle"></i> Volver a liquidación diaria
                         </a>
                     </div>
-
                 </div>
             </div>
         </div>
     </div>
-    
 
-    <!-- JavaScript de Bootstrap 5.3.8 -->
+
     <script src="js/bootstrap-5.3.8/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

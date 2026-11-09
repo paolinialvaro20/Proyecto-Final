@@ -8,6 +8,9 @@ if (!isset($_SESSION["id_usuario"])) {
     exit;
 }
 
+require_once "permisos.php";
+exigirPermisoAdministrativo($conexion, $_SESSION["id_usuario"]);
+
 // Obtener los roles disponibles
 $sqlRoles = "SELECT id, nombre FROM rol ORDER BY nombre";
 

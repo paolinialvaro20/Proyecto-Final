@@ -9,6 +9,9 @@ if (!isset($_SESSION["id_usuario"])) {
     exit;
 }
 
+require_once "permisos.php";
+exigirPermisoAdministrativo($conexion, $_SESSION["id_usuario"]);
+
 $mensaje = "";
 $error = "";
 

@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once "conexion.php";
+require_once "permisos.php";
 
 // =====================================================
 // VERIFICAR SESIÓN
@@ -9,6 +10,7 @@ if (!isset($_SESSION["id_usuario"])) {
     header("Location: login.php");
     exit;
 }
+exigirPermisoNoCajero($conexion, $_SESSION["id_usuario"]);
 
 // =====================================================
 // VARIABLES

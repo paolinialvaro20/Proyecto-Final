@@ -8,6 +8,9 @@ if (!isset($_SESSION["id_usuario"])) {
     exit;
 }
 
+require_once "permisos.php";
+exigirPermisoAdministrativo($conexion, $_SESSION["id_usuario"]);
+
 // Obtener los registros de auditoría
 $sql = "SELECT a.id, u.usuario, a.accion, a.entidad, a.id_entidad, a.descripcion, a.valor_anterior, a.valor_nuevo, a.fecha_hora
         FROM auditoria a LEFT JOIN usuario u ON a.id_usuario = u.id

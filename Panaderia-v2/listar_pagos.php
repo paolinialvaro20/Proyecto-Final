@@ -53,7 +53,7 @@ $pagos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <tr>
                                     <th>ID</th>
                                     <th>Factura</th>
-                                    <th>Repartidor</th>
+                                    <th>Cobrado por</th>
                                     <th>Monto</th>
                                     <th>Forma de pago</th>
                                     <th>Fecha y hora</th>

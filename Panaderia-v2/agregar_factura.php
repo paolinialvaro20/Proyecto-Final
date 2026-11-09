@@ -9,6 +9,9 @@ if (!isset($_SESSION["id_usuario"])) {
     exit;
 }
 
+require_once "permisos.php";
+exigirPermisoGestionFacturas($conexion, $_SESSION["id_usuario"]);
+
 $mensaje = "";
 
 // Usuario que inició sesión
