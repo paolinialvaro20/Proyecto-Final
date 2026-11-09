@@ -29,7 +29,7 @@ Es necesario descargar la versión correspondiente desde el sitio oficial:
 - **Bootstrap Icons 1.13.1:** [Descargar desde GitHub](https://github.com/twbs/icons/releases/tag/v1.13.1)
 Una vez descargado, extraer los archivos y colocar la carpeta dentro del directorio `imagenes/` del proyecto, respetando la siguiente estructura:
 ```text
-Panaderia/
+Panaderia-v2/
 ├── imagenes/
 │   └── bootstrap-icons-1.13.1/
 │       ├── bootstrap-icons.min.css
@@ -62,7 +62,7 @@ Para ejecutar el proyecto localmente se necesita:
 7. Abrir el navegador y acceder a:
 
    ```text
-   http://localhost/Panaderia/
+   http://localhost/Panaderia-v2/
    ```
 
 ## Seguridad y control de acceso
