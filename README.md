@@ -23,6 +23,22 @@ Está diseñado para ser utilizado por diferentes perfiles de usuarios, como adm
 - **Bootstrap 5.3.8:** diseño adaptable y componentes de interfaz.
 - **Bootstrap Icons 1.13.1:** iconografía.
 
+## Dependencias
+El proyecto utiliza Bootstrap Icons 1.13.1 para mostrar los iconos de la interfaz.
+Es necesario descargar la versión correspondiente desde el sitio oficial:
+- **Bootstrap Icons 1.13.1:** [Descargar desde GitHub](https://github.com/twbs/icons/releases/tag/v1.13.1)
+Una vez descargado, extraer los archivos y colocar la carpeta dentro del directorio `imagenes/` del proyecto, respetando la siguiente estructura:
+```text
+Panaderia/
+├── imagenes/
+│   └── bootstrap-icons-1.13.1/
+│       ├── bootstrap-icons.min.css
+│       └── fonts/
+│           ├── bootstrap-icons.woff
+│           └── bootstrap-icons.woff2
+```
+Es importante conservar la estructura de carpetas para que los iconos se visualicen correctamente.
+
 ## Requisitos
 Para ejecutar el proyecto localmente se necesita:
 - XAMPP.
