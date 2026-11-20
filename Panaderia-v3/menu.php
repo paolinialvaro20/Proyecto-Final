@@ -27,6 +27,7 @@ if (!$usuarioEsCajero && !$usuarioEsRepartidor) {
     ]];
 }
 $ddGrupos['Liquidaciones'] = ['icono'=>'liquidacion','enlaces'=>[
+    ['listar_liquidacion.php','Listar liquidaciones'],
     ...(!$usuarioEsCajero ? [['liquidacion_diaria.php','Liquidación de repartidor']] : []),
     ...(!$usuarioEsRepartidor ? [['liquidacion_diaria_cajero.php','Liquidación de cajero']] : [])
 ]];
